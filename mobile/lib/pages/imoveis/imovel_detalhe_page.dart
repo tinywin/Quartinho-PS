@@ -7,6 +7,7 @@ import 'comentarios_section.dart';
 import 'map_preview.dart';
 import '../../core/services/favorites_service.dart';
 import '../../core/services/auth_service.dart';
+import 'contrato_aluguel_page.dart';
 
 class ImovelDetalhePage extends StatelessWidget {
   final Map imovel;
@@ -95,7 +96,7 @@ class ImovelDetalhePage extends StatelessWidget {
                     'R\$ ${(imovel['preco_total'] ?? imovel['preco'] ?? '-').toString()} / mês',
                     style: GoogleFonts.lato(fontSize: 20, color: const Color(0xFFCBACFF), fontWeight: FontWeight.bold),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
 
                   // Descrição
                   if (imovel['descricao'] != null && (imovel['descricao'].toString().isNotEmpty))
@@ -121,6 +122,25 @@ class ImovelDetalhePage extends StatelessWidget {
                     const SizedBox(height: 18),
                     Text('Proprietário: ${imovel['dono'] ?? imovel['proprietario']}'),
                   ],
+
+                  // Botão Alugar abaixo das informações do dono (centralizado)
+                  const SizedBox(height: 12),
+                  Center(
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6E56CF), // paleta da página
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => ContratoAluguelPage(imovel: imovel)),
+                        );
+                      },
+                      child: Text('Alugar', style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                    ),
+                  ),
 
                   const SizedBox(height: 24),
 

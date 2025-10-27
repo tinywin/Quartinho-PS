@@ -1,6 +1,71 @@
 from rest_framework import serializers
 from .models import Propriedade, FotoPropriedade, Comentario
 from usuarios.serializers import UsuarioSerializer
+from .models import ContratoSolicitacao
+
+class ContratoSolicitacaoSerializer(serializers.ModelSerializer):
+    solicitante = UsuarioSerializer(read_only=True)
+    comprovante = serializers.FileField(required=False, allow_null=True)
+    contrato_final = serializers.FileField(required=False, allow_null=True)
+    contrato_assinado = serializers.FileField(required=False, allow_null=True)
+
+    class Meta:
+        model = ContratoSolicitacao
+        fields = ['id', 'imovel', 'solicitante', 'nome_completo', 'cpf', 'telefone', 'comprovante', 'contrato_final', 'contrato_assinado', 'status', 'resposta_do_proprietario', 'data_criacao', 'data_atualizacao']
+        read_only_fields = ['id', 'solicitante', 'status', 'data_criacao', 'data_atualizacao']
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+        if request and getattr(request, 'user', None):
+            validated_data['solicitante'] = request.user
+        return super().create(validated_data)
+
+    def to_representation(self, instance):
+        """Return a representation where `imovel` is a nested object (not only the PK)
+        and `comprovante` is an absolute URL when possible. This keeps input as the
+        existing `imovel` PK (so mobile code that sends `imovel` as an id continues
+        to work) while giving clients richer output for display to owners.
+        """
+        rep = super().to_representation(instance)
+        try:
+            # nest the imovel using PropriedadeSerializer (defined later in this module)
+            # pass context so serializers can build absolute URLs if request is present
+            rep['imovel'] = PropriedadeSerializer(instance.imovel, context=self.context).data
+        except Exception:
+            # if something goes wrong, keep the original PK value
+            rep['imovel'] = rep.get('imovel')
+
+        # Turn file field into an absolute URL when possible
+        try:
+            request = self.context.get('request') if self.context else None
+            if instance.comprovante:
+                if hasattr(instance.comprovante, 'url'):
+                    url = instance.comprovante.url
+                    if request is not None:
+                        rep['comprovante'] = request.build_absolute_uri(url)
+                    else:
+                        rep['comprovante'] = url
+            # contrato_final -> absolute URL when present
+            if instance.contrato_final:
+                if hasattr(instance.contrato_final, 'url'):
+                    cfurl = instance.contrato_final.url
+                    if request is not None:
+                        rep['contrato_final'] = request.build_absolute_uri(cfurl)
+                    else:
+                        rep['contrato_final'] = cfurl
+            # contrato_assinado -> absolute URL when present
+            if instance.contrato_assinado:
+                if hasattr(instance.contrato_assinado, 'url'):
+                    caurl = instance.contrato_assinado.url
+                    if request is not None:
+                        rep['contrato_assinado'] = request.build_absolute_uri(caurl)
+                    else:
+                        rep['contrato_assinado'] = caurl
+        except Exception:
+            # keep whatever representation DRF produced
+            pass
+
+        return rep
 
 class FotoPropriedadeSerializer(serializers.ModelSerializer):
     class Meta:

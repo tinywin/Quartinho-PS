@@ -1,10 +1,12 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.decorators import action, api_view, permission_classes
 from django.db.models import Q
 from .models import Propriedade, FotoPropriedade, Comentario
 from .serializers import PropriedadeSerializer, FotoPropriedadeSerializer, ComentarioSerializer
+from .models import ContratoSolicitacao
+from .serializers import ContratoSolicitacaoSerializer
 from .permissions import IsOwnerOrReadOnly, IsAuthorOrReadOnly
 from .pagination import StandardResultsSetPagination
 from django.shortcuts import render, get_object_or_404, redirect
@@ -223,3 +225,104 @@ class ComentarioViewSet(viewsets.ModelViewSet):
         if imovel_id:
             qs = qs.filter(imovel_id=imovel_id)
         return qs
+
+
+class ContratoSolicitacaoViewSet(viewsets.ModelViewSet):
+    queryset = ContratoSolicitacao.objects.all()
+    serializer_class = ContratoSolicitacaoSerializer
+    # Accept JSON as well as multipart/form-data and form-encoded requests.
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        # proprietarios veem solicitações dos seus imóveis
+        qs_owner = ContratoSolicitacao.objects.filter(imovel__proprietario=user)
+        # solicitantes veem suas próprias solicitações
+        qs_user = ContratoSolicitacao.objects.filter(solicitante=user)
+        # unir (owner pode ser solicitante em casos, mas distinct)
+        return (qs_owner | qs_user).distinct().order_by('-data_criacao')
+
+    def perform_create(self, serializer):
+        serializer.save(solicitante=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def set_status(self, request, pk=None):
+        # Apenas o proprietário do imóvel pode alterar o status
+        obj = self.get_object()
+        user = request.user
+        if obj.imovel.proprietario != user:
+            return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
+
+        status_val = request.data.get('status')
+        if status_val not in dict(ContratoSolicitacao.STATUS_CHOICES):
+            return Response({'detail': 'Status inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        obj.status = status_val
+        obj.resposta_do_proprietario = request.data.get('resposta_do_proprietario', obj.resposta_do_proprietario)
+        obj.save()
+        return Response(ContratoSolicitacaoSerializer(obj, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser, JSONParser])
+    def upload_contrato(self, request, pk=None):
+        """Allow the property owner to upload the final contract file for a solicitation.
+
+        Expects multipart/form-data with a file field named 'contrato_final'. Optionally
+        accepts 'status' to set the status (e.g., 'approved') and an optional 'resposta_do_proprietario'.
+        Only the property owner may perform this action.
+        """
+        obj = self.get_object()
+        user = request.user
+        if obj.imovel.proprietario != user:
+            return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # handle uploaded file
+        uploaded = request.FILES.get('contrato_final')
+        # Debug: if no file was provided, inform client
+        if not uploaded and not request.data.get('status') and not request.data.get('resposta_do_proprietario'):
+            return Response({'detail': 'Nenhum arquivo enviado (campo contrato_final).'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if uploaded:
+            # simple debug log to help diagnose upload issues in dev
+            try:
+                print(f"upload_contrato: received file campo 'contrato_final' name={getattr(uploaded, 'name', None)} size={getattr(uploaded, 'size', None)} user={user.id}")
+            except Exception:
+                pass
+            obj.contrato_final = uploaded
+
+        status_val = request.data.get('status')
+        if status_val:
+            if status_val not in dict(ContratoSolicitacao.STATUS_CHOICES):
+                return Response({'detail': 'Status inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+            obj.status = status_val
+
+        obj.resposta_do_proprietario = request.data.get('resposta_do_proprietario', obj.resposta_do_proprietario)
+        obj.save()
+        return Response(ContratoSolicitacaoSerializer(obj, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], parser_classes=[MultiPartParser, FormParser, JSONParser])
+    def upload_contrato_assinado(self, request, pk=None):
+        """Allow the solicitante (tenant) to upload a signed contract file.
+
+        Expects multipart/form-data with a file field named 'contrato_assinado'.
+        Only the original solicitante for this ContratoSolicitacao may upload here.
+        """
+        obj = self.get_object()
+        user = request.user
+        if obj.solicitante != user:
+            return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
+
+        uploaded = request.FILES.get('contrato_assinado')
+        if not uploaded:
+            return Response({'detail': 'Nenhum arquivo enviado (campo contrato_assinado).'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            print(f"upload_contrato_assinado: received file campo 'contrato_assinado' name={getattr(uploaded, 'name', None)} size={getattr(uploaded, 'size', None)} user={user.id}")
+        except Exception:
+            pass
+
+        obj.contrato_assinado = uploaded
+        # optionally the tenant might want to update a small message; accept it
+        obj.resposta_do_proprietario = request.data.get('resposta_do_proprietario', obj.resposta_do_proprietario)
+        obj.save()
+        return Response(ContratoSolicitacaoSerializer(obj, context={'request': request}).data)
