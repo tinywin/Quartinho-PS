@@ -6,6 +6,7 @@ import { UserPreference } from "./screens/UserPreference/UserPreference";
 import AddProperty from "./screens/AddProperty/AddProperty";
 import { Properties } from "./screens/Properties/Properties";
 import PropertyDetails from "./screens/Properties/PropertyDetails";
+import Profile from "./screens/Profile/Profile";
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         <Route path="/add-property" element={<AddProperty />} />
         <Route path="/properties" element={<Properties />} />
         <Route path="/properties/:id" element={<PropertyDetails />} />
+        <Route path="/profile" element={<Profile />} />
       </Routes>
     </Router>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, MapPin, Heart, Star, Bed, Bath, Car, Wifi } from "lucide-react";
 import { Button } from "../../components/ui/button";
@@ -53,6 +53,10 @@ export const Properties = (): JSX.Element => {
   });
   const [onlyMine, setOnlyMine] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
 
@@ -61,6 +65,7 @@ export const Properties = (): JSX.Element => {
   useEffect(() => {
     const ud = getUserData();
     setCurrentUserId(ud?.id ?? null);
+    setCurrentUser(ud ?? null);
     fetchProperties();
     fetchFavorites();
 
@@ -71,6 +76,80 @@ export const Properties = (): JSX.Element => {
     }
 
   }, [filters, onlyMine, onlyFavorites]);
+
+  // fetch current user from backend to ensure we have the latest profile (including avatar url)
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/usuarios/me/`, { headers: getAuthHeaders() });
+        const data = res.data;
+        if (data) {
+          setCurrentUser(data);
+          setCurrentUserId(data.id ?? currentUserId);
+          setAvatarError(false);
+        }
+      } catch (err) {
+        // ignore: if unauthenticated or endpoint not present, fallback to local stored user
+        // eslint-disable-next-line no-console
+        console.debug('Could not fetch current user profile', err);
+      }
+    };
+
+    fetchCurrentUser();
+    // only run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // close menu when clicking outside
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (!showUserMenu) return;
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
+  }, [showUserMenu]);
+
+  const getUserAvatar = (u: any) => {
+    if (!u) return null;
+    // possible shapes: string URL, relative path, object with url property
+    const raw = u.avatar ?? u.avatar_url ?? u.foto ?? u.avatarUrl ?? u.picture ?? u.image ?? null;
+    if (!raw) return null;
+
+    // If avatar is object like { url: '...' } or { imagem: '...' }
+    if (typeof raw === 'object') {
+      const r = raw.url ?? raw.url_imagem ?? raw.imagem ?? raw.path ?? raw.filename ?? null;
+      if (typeof r === 'string') {
+        if (/^https?:\/\//i.test(r) || r.startsWith('data:')) return r;
+        if (r.startsWith('/')) return `${API_BASE_URL.replace(/\/$/, '')}${r}`;
+        return r;
+      }
+      return null;
+    }
+
+    // If it's a string
+    if (typeof raw === 'string') {
+      // already absolute
+      if (/^https?:\/\//i.test(raw) || raw.startsWith('data:')) return raw;
+      // relative path from backend (starts with /media or /)
+      if (raw.startsWith('/')) return `${API_BASE_URL.replace(/\/$/, '')}${raw}`;
+      // otherwise return as-is
+      return raw;
+    }
+
+    return null;
+  };
+
+  const getUserInitials = (u: any) => {
+    if (!u) return '';
+    const name = u.nome || u.name || u.full_name || u.first_name || u.username || '';
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
 
   const fetchProperties = async () => {
     try {
@@ -259,13 +338,48 @@ export const Properties = (): JSX.Element => {
               </Button>
 
             <div className="ml-auto" />
-            <Button
-              variant="secondary"
-              onClick={() => { clearAuth(); navigate('/email-login'); }}
-              className="px-4"
-            >
-              Logout
-            </Button>
+            <div ref={userMenuRef} className="relative">
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowUserMenu((v) => !v); }}
+                className="flex items-center focus:outline-none"
+              >
+                {(() => {
+                  const avatar = getUserAvatar(currentUser);
+                  if (avatar && !avatarError) {
+                    return (
+                      <img
+                        src={avatar}
+                        alt={currentUser?.nome || 'Usuário'}
+                        onError={() => setAvatarError(true)}
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+                    );
+                  }
+                  return (
+                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm font-medium text-gray-700">
+                      {getUserInitials(currentUser) || 'U'}
+                    </div>
+                  );
+                })()}
+              </button>
+
+              {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-white border rounded shadow z-50">
+                  <button
+                    onClick={() => { setShowUserMenu(false); navigate('/profile'); }}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                  >
+                    Perfil
+                  </button>
+                  <button
+                    onClick={() => { setShowUserMenu(false); clearAuth(); navigate('/email-login'); }}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                  >
+                    Sair
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
           
           {/* Search Bar */}
