@@ -28,9 +28,17 @@ interface Property {
     imagem: string;
     principal: boolean;
   }>;
+  // possible rating fields returned by API
+  nota_media?: number;
+  rating?: number;
+  avg_rating?: number;
+  media?: number;
 }
 
 export const Properties = (): JSX.Element => {
+  // debug: confirmar montagem do componente
+  // eslint-disable-next-line no-console
+  console.log('[DEBUG] Properties mounted');
   const navigate = useNavigate();
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,7 +86,24 @@ export const Properties = (): JSX.Element => {
         headers: getAuthHeaders(),
         params: onlyMine ? undefined : cleanParams,
       });
-      setProperties(response.data);
+
+      // Normaliza diferentes formatos de resposta (array direto ou paginação DRF)
+      const data = response.data;
+      let items: Property[] = [];
+      if (Array.isArray(data)) {
+        items = data;
+      } else if (data && Array.isArray(data.results)) {
+        items = data.results;
+      } else if (data && Array.isArray(data.data)) {
+        items = data.data;
+      } else {
+        // Se não for nenhum dos formatos esperados, loga para facilitar debug
+        // eslint-disable-next-line no-console
+        console.warn('[Properties] resposta da API inesperada ao buscar propriedades:', data);
+        items = [];
+      }
+
+      setProperties(items);
     } catch (error) {
       console.error("Erro ao buscar propriedades:", error);
       setError("Não foi possível carregar as propriedades. Tente novamente.");
@@ -102,6 +127,22 @@ export const Properties = (): JSX.Element => {
     }).format(price);
   };
 
+  const getPropertyRating = (p: Property) => {
+    // try common fields from API
+    const raw = (p as any).nota_media ?? (p as any).avg_rating ?? (p as any).rating ?? (p as any).nota ?? (p as any).media ?? null;
+    if (raw != null) {
+      const n = Number(raw);
+      if (!Number.isNaN(n)) return n;
+    }
+    // fallback: if the property embedded comments exist, compute average
+    const comments = (p as any).comentarios ?? (p as any).comentarios_list ?? null;
+    if (Array.isArray(comments) && comments.length > 0) {
+      const notes = comments.map((c: any) => Number(c.nota ?? c.rating ?? 0)).filter((v: number) => v > 0);
+      if (notes.length > 0) return notes.reduce((a: number, b: number) => a + b, 0) / notes.length;
+    }
+    return null;
+  };
+
   const getPropertyImage = (property: Property) => {
     const principalPhoto = property.fotos?.find(foto => foto.principal);
     return principalPhoto?.imagem || property.fotos?.[0]?.imagem || '/placeholder-property.jpg';
@@ -112,7 +153,15 @@ export const Properties = (): JSX.Element => {
       const response = await axios.get(`${API_BASE_URL}/propriedades/favoritos/`, {
         headers: getAuthHeaders(),
       });
-      const ids = response.data.map((prop: Property) => prop.id);
+      const data = response.data;
+      let items: Property[] = [];
+      if (Array.isArray(data)) {
+        items = data;
+      } else if (data && Array.isArray(data.results)) {
+        items = data.results;
+      }
+
+      const ids = items.map((prop: Property) => prop.id);
       setFavoriteIds(new Set(ids));
     } catch (error) {
       console.error("Erro ao buscar IDs de favoritos:", error);
@@ -125,7 +174,14 @@ export const Properties = (): JSX.Element => {
       const response = await axios.get(`${API_BASE_URL}/propriedades/favoritos/`, {
         headers: getAuthHeaders(),
       });
-      setProperties(response.data);
+      const data = response.data;
+      let items: Property[] = [];
+      if (Array.isArray(data)) {
+        items = data;
+      } else if (data && Array.isArray(data.results)) {
+        items = data.results;
+      }
+      setProperties(items);
     } catch (error) {
       console.error("Erro ao buscar propriedades favoritas:", error);
       setError("Não foi possível carregar seus favoritos.");
@@ -351,8 +407,15 @@ export const Properties = (): JSX.Element => {
                       {property.titulo}
                     </h3>
                     <div className="flex items-center">
-                      <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                      <span className="text-sm text-gray-600 ml-1">4.8</span>
+                        {(() => {
+                          const r = getPropertyRating(property);
+                          return (
+                            <>
+                              <Star className={`w-4 h-4 ${r ? 'text-yellow-400' : 'text-gray-300'}`} />
+                              <span className="text-sm text-gray-600 ml-1">{r ? r.toFixed(1) : '—'}</span>
+                            </>
+                          );
+                        })()}
                     </div>
                   </div>
 
@@ -439,7 +502,7 @@ export const Properties = (): JSX.Element => {
                       </span>
                       <span className="text-gray-600 text-sm">/mês</span>
                     </div>
-                    <Button className="bg-orange-500 hover:bg-orange-600">
+                    <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => navigate(`/properties/${property.id}`)}>
                       Ver detalhes
                     </Button>
                   </div>
