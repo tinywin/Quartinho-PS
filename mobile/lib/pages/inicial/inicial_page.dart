@@ -20,6 +20,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/constants.dart';
 import '../../core/utils/property_utils.dart';
 import 'package:mobile/pages/profile/profile_page.dart';
+import 'package:mobile/pages/profile/contratos_page.dart';
 import 'package:mobile/pages/login/login_home_page.dart';
 import 'package:mobile/pages/inicial/favorites_page.dart';
 import 'package:mobile/core/services/favorites_service.dart';
@@ -572,6 +573,11 @@ class _Header extends StatelessWidget {
                       try {
                         Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()));
                       } catch (_) {}
+                    } else if (v == 'contratos') {
+                      // abrir página de contratos (placeholder)
+                      try {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const ContratosPage()));
+                      } catch (_) {}
                     } else if (v == 'logout') {
                       await AuthService.logout();
                       try {
@@ -585,6 +591,7 @@ class _Header extends StatelessWidget {
                   },
                   itemBuilder: (_) => const [
                     PopupMenuItem(value: 'perfil', child: Text('Perfil')),
+                    PopupMenuItem(value: 'contratos', child: Text('Contratos')),
                     PopupMenuItem(value: 'logout', child: Text('Sair')),
                   ],
                   child: CircleAvatar(
