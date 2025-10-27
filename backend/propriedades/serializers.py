@@ -31,7 +31,9 @@ class PropriedadeSerializer(serializers.ModelSerializer):
     
     def get_comentarios(self, obj):
         qs = obj.comentarios.all()
-        return ComentarioSerializer(qs, many=True).data
+        # pass context so ComentarioSerializer can build absolute avatar URLs
+        context = self.context if hasattr(self, 'context') else {}
+        return ComentarioSerializer(qs, many=True, context=context).data
 
     def get_favorito(self, obj):
         # retorna True se o usuário na request favoritou este imóvel
@@ -45,8 +47,39 @@ class PropriedadeSerializer(serializers.ModelSerializer):
 
 class ComentarioSerializer(serializers.ModelSerializer):
     autor = UsuarioSerializer(read_only=True)
+    usuario = serializers.SerializerMethodField()
 
     class Meta:
         model = Comentario
-        fields = ['id', 'imovel', 'autor', 'texto', 'nota', 'data_criacao', 'data_atualizacao']
+        fields = ['id', 'imovel', 'autor', 'usuario', 'texto', 'nota', 'data_criacao', 'data_atualizacao']
         read_only_fields = ['autor', 'data_criacao', 'data_atualizacao']
+
+    def get_usuario(self, obj):
+        user = obj.autor
+        if not user:
+            return None
+
+        # try to resolve avatar to a URL/string; avoid returning file objects or bytes
+        avatar_val = None
+        avatar_field = getattr(user, 'avatar', None)
+        try:
+            if avatar_field:
+                # If avatar is a FileField/ImageField, prefer absolute URL when request context is available
+                request = self.context.get('request') if self.context else None
+                if hasattr(avatar_field, 'url') and request is not None:
+                    avatar_val = request.build_absolute_uri(avatar_field.url)
+                elif hasattr(avatar_field, 'url'):
+                    avatar_val = avatar_field.url
+                else:
+                    avatar_val = str(avatar_field)
+        except Exception:
+            avatar_val = None
+
+        return {
+            'id': user.id,
+            'nome_completo': getattr(user, 'full_name', None) or getattr(user, 'username', None),
+            'first_name': getattr(user, 'first_name', None),
+            'username': getattr(user, 'username', None),
+            'email': getattr(user, 'email', None),
+            'avatar': avatar_val,
+        }
