@@ -1,6 +1,10 @@
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
+// Permite sobrescrever o host via --dart-define=BACKEND_HOST=http://...
+const String _hostDefine = String.fromEnvironment('BACKEND_HOST', defaultValue: '');
+
+// Valores padrão (fallbacks) quando BACKEND_HOST não está definido
 const String _hostWeb = 'http://127.0.0.1:8000';
 // IP local do computador (para celular físico)
 const String _hostLan = 'http://192.168.10.122:8000';
@@ -8,6 +12,9 @@ const String _hostLan = 'http://192.168.10.122:8000';
 const String _hostAndroidEmu = 'http://10.0.2.2:8000';
 
 String get backendHost {
+  // Se BACKEND_HOST foi passado via dart-define, usar diretamente.
+  if (_hostDefine.isNotEmpty) return _hostDefine;
+
   if (kIsWeb) return _hostWeb;
   try {
     if (Platform.isAndroid) {

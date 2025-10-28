@@ -61,7 +61,35 @@ const Register = () => {
       }
     } catch (error: any) {
       console.error("Erro ao registrar:", error);
-      setErrorMessage(error.response?.data?.detail || "Erro ao criar conta.");
+      // Mensagens amigáveis com base nos erros do backend
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        const data = error.response?.data as any;
+        if (status === 400 && data) {
+          const nonField = Array.isArray(data?.non_field_errors) ? data.non_field_errors[0] : undefined;
+          const emailMsg = Array.isArray(data?.email) ? data.email[0] : (typeof data?.email === 'string' ? data.email : undefined);
+          const senhaMsg = Array.isArray(data?.password) ? data.password[0] : (typeof data?.password === 'string' ? data.password : undefined);
+          const nomeMsg = Array.isArray(data?.nome_completo) ? data.nome_completo[0] : (typeof data?.nome_completo === 'string' ? data.nome_completo : undefined);
+          const detailMsg = typeof data?.detail === 'string' ? data.detail : undefined;
+
+          setErrorMessage(
+            nonField ||
+            emailMsg ||
+            senhaMsg ||
+            nomeMsg ||
+            detailMsg ||
+            "Dados inválidos. Verifique nome, e-mail e senha."
+          );
+        } else if (status === 409) {
+          setErrorMessage("Este e-mail já está cadastrado.");
+        } else if (status === 500) {
+          setErrorMessage("Erro no servidor ao criar conta. Tente novamente.");
+        } else {
+          setErrorMessage("Não foi possível criar a conta. Tente novamente.");
+        }
+      } else {
+        setErrorMessage(error?.message || "Erro ao criar conta.");
+      }
     } finally {
       setLoading(false);
     }

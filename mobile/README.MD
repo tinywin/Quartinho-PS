@@ -1,7 +1,7 @@
 # Quartinho-PS Mobile
 
-Este é o aplicativo Flutter do Quartinho-PS, que consome a API Django do backend.  
-Siga as instruções abaixo para rodar o app no seu celular (Android ou iOS) usando o IP do backend.
+Este é o aplicativo Flutter do Quartinho-PS, que consome a API Django do backend.
+Agora o host do backend pode ser configurado via `--dart-define=BACKEND_HOST=...`, sem editar código.
 
 ## Pré-requisitos
 
@@ -9,7 +9,7 @@ Siga as instruções abaixo para rodar o app no seu celular (Android ou iOS) usa
 - Backend Django rodando na mesma rede, com IP acessível pelo celular
 - Celular e computador conectados na mesma rede Wi-Fi
 
-## Passos para rodar o app no celular
+## Passos para rodar o app
 
 1. **Descubra o IP do seu computador**
    - No terminal, rode:  
@@ -18,12 +18,11 @@ Siga as instruções abaixo para rodar o app no seu celular (Android ou iOS) usa
      ```
    - Procure por um IP do tipo `192.168.x.x` ou `10.0.x.x`.
 
-2. **Altere o IP do backend no app**
-   - No arquivo `lib/core/constants.dart`, defina:
-     ```dart
-     const String backendHost = 'http://SEU_IP:8000';
-     ```
-     Substitua `SEU_IP` pelo IP do seu computador.
+2. **Configure o host do backend (sem editar código)**
+   - Use `--dart-define=BACKEND_HOST`:
+     - Emulador Android: `flutter run -d emulator-5554 --dart-define=BACKEND_HOST=http://10.0.2.2:8000`
+     - Celular físico (mesma rede): `flutter run --dart-define=BACKEND_HOST=http://SEU_IP:8000`
+     - Web (Flutter Web): `flutter run -d chrome --dart-define=BACKEND_HOST=http://127.0.0.1:8000`
 
 3. **Conecte o celular via USB ou use emulador**
    - Para Android: ative a depuração USB e aceite a conexão.
@@ -46,16 +45,17 @@ Siga as instruções abaixo para rodar o app no seu celular (Android ou iOS) usa
    - No terminal do projeto mobile, execute:
      ```bash
      flutter pub get
-     flutter run
+     flutter run -d emulator-5554 --dart-define=BACKEND_HOST=http://10.0.2.2:8000
      ```
-   - Escolha o dispositivo (celular ou emulador) para rodar o app.
+   - Troque o dispositivo ou o host conforme necessário.
 
 ## Observações
 
 - O backend precisa estar rodando e acessível pelo IP configurado.
 - Se não conseguir acessar, teste no navegador do celular:  
   `http://SEU_IP:8000/api/`
-- Se usar emulador Android, pode usar `10.0.2.2` como IP do backend.
+- Em Android Emulator, use `http://10.0.2.2:8000`.
+- Em celular físico, use o IP da sua máquina: `http://SEU_IP:8000`.
 
 ---
 

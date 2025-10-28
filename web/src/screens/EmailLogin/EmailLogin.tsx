@@ -61,7 +61,10 @@ export const EmailLogin = (): JSX.Element => {
         throw new Error("Access token não encontrado");
       }
 
-      // Salvar tokens no localStorage
+      // Salvar tokens no localStorage (chaves novas e antigas para compatibilidade)
+      localStorage.setItem("accessToken", tokens.access);
+      localStorage.setItem("refreshToken", tokens.refresh || "");
+      localStorage.setItem("userData", JSON.stringify(user));
       localStorage.setItem("access_token", tokens.access);
       localStorage.setItem("refresh_token", tokens.refresh || "");
       localStorage.setItem("user_data", JSON.stringify(user));
@@ -69,7 +72,36 @@ export const EmailLogin = (): JSX.Element => {
       navigate("/user-preference");
     } catch (err: any) {
       console.error("Erro no login:", err);
-      setError(err?.message || "Falha no login");
+      // Tratamento de erros amigáveis ao usuário
+      // DRF costuma retornar 400 com {"non_field_errors": ["..."]} ou campos específicos
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status;
+        const data = err.response?.data as any;
+        if (status === 400 && data) {
+          // Extrai a melhor mensagem possível
+          const nonField = Array.isArray(data?.non_field_errors) ? data.non_field_errors[0] : undefined;
+          const emailMsg = Array.isArray(data?.email) ? data.email[0] : (typeof data?.email === 'string' ? data.email : undefined);
+          const senhaMsg = Array.isArray(data?.password) ? data.password[0] : (typeof data?.password === 'string' ? data.password : undefined);
+          const mensagemDireta = typeof data === 'string' ? data : undefined;
+
+          const friendly =
+            nonField ||
+            emailMsg ||
+            senhaMsg ||
+            mensagemDireta ||
+            "E-mail ou senha inválidos. Verifique seus dados e tente novamente.";
+
+          setError(friendly);
+        } else if (status === 401) {
+          setError("Credenciais inválidas. Verifique seu e-mail e senha.");
+        } else if (status === 403) {
+          setError("Acesso negado. Verifique suas credenciais e tente novamente.");
+        } else {
+          setError("Não foi possível realizar o login. Tente novamente.");
+        }
+      } else {
+        setError(err?.message || "Falha no login");
+      }
     } finally {
       setLoading(false);
     }
