@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile/core/services/auth_service.dart';
+import 'package:mobile/pages/choose_role/choose_role_page.dart';
 import 'package:mobile/pages/inicial/inicial_page.dart';
 
 class ButtonLogin extends StatefulWidget {
@@ -49,15 +50,28 @@ class _ButtonLoginState extends State<ButtonLogin> {
         final name = user != null ? (user['username'] ?? user['full_name'] ?? '') : '';
         final emailMe = user != null ? (user['email'] ?? email) : email;
 
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => InicialPage(
-              name: name.isNotEmpty ? name : emailMe.split('@').first,
-              city: '', // cidade pode ser preenchida depois pelo usuário/perfil
+        final alreadyDone = await AuthService.isOnboardingCompleted(emailMe);
+        if (alreadyDone) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => InicialPage(
+                name: name.isNotEmpty ? name : emailMe.split('@').first,
+                city: '',
+              ),
             ),
-          ),
-        );
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChooseRolePage(
+                name: name.isNotEmpty ? name : emailMe.split('@').first,
+                email: emailMe,
+              ),
+            ),
+          );
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Email ou senha inválidos')),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile/pages/location/location_page.dart';
+import 'package:mobile/pages/signup/extra_signup_page.dart';
+import 'package:mobile/core/services/auth_service.dart';
 
 class ChooseRolePage extends StatelessWidget {
   final String name;
@@ -70,7 +72,19 @@ class ChooseRolePage extends StatelessWidget {
                             label: "Sou Locador",
                             icon: Icons.home_work_outlined,
                             onTap: () {
-                              // TODO: fluxo do Locador (repassar os mesmos dados)
+                              AuthService.setRoleCompleted(email);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ExtraSignUpPage(
+                                    name: name,
+                                    email: email,
+                                    cpf: cpf ?? '',
+                                    birthDate: birthDate ?? DateTime(2000, 1, 1),
+                                    city: null,
+                                  ),
+                                ),
+                              );
                             },
                           ),
                           const SizedBox(height: 20),
@@ -80,6 +94,7 @@ class ChooseRolePage extends StatelessWidget {
                             label: "Sou Inquilino",
                             icon: Icons.person_outline,
                             onTap: () {
+                              AuthService.setRoleCompleted(email);
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
@@ -162,7 +177,9 @@ class _BackPillButton extends StatelessWidget {
         child: const SizedBox(
           width: 36,
           height: 36,
-          child: Center(child: Icon(Icons.arrow_back_ios_new_rounded, size: 18)),
+          child: Center(
+            child: Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+          ),
         ),
       ),
     );

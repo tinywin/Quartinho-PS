@@ -1,0 +1,53 @@
+COMO CONFIGURAR LOGIN SOCIAL (GOOGLE E FACEBOOK) NO WEB
+
+Pré-requisitos
+- Backend rodando em http://127.0.0.1:8000
+- Frontend (Vite) rodando em http://localhost:5176 (ou outra porta)
+- Variáveis de ambiente do Vite definidas em web/.env (ou web/.env.local)
+
+Arquivos e variáveis
+- Crie/edite o arquivo: web/.env
+- Adicione as chaves:
+  VITE_GOOGLE_CLIENT_ID=SEU_CLIENT_ID_DO_GOOGLE
+  VITE_FACEBOOK_APP_ID=SEU_APP_ID_DO_FACEBOOK
+- Após salvar, reinicie o servidor do frontend: npm run dev
+
+Configuração do Google (Google Identity Services)
+1) Acesse https://console.cloud.google.com/ e faça login.
+2) Crie um projeto (ou selecione um existente).
+3) Configure a tela de consentimento OAuth (OAuth consent screen) para o projeto.
+4) Crie uma credencial OAuth 2.0 do tipo "Web application" (APIs & Services > Credentials > Create Credentials > OAuth client ID).
+5) Em Authorized JavaScript origins, adicione o(s) domínio(s) de desenvolvimento:
+   - http://localhost:5176 (porta do Vite ativa)
+   - Se você usar outras portas, adicione também: http://localhost:5174 e http://localhost:5175
+6) Não é necessário definir Authorized redirect URIs para o One Tap; caso use fluxo OAuth completo, configure conforme sua rota.
+7) Salve e copie o "Client ID" gerado.
+8) No arquivo web/.env, defina:
+   VITE_GOOGLE_CLIENT_ID=SEU_CLIENT_ID_DO_GOOGLE
+9) Reinicie o frontend: npm run dev.
+
+Configuração do Facebook (Meta for Developers)
+1) Acesse https://developers.facebook.com/ e faça login.
+2) Crie um aplicativo do tipo "Consumer" (ou selecione um existente).
+3) Adicione o produto "Facebook Login" ao aplicativo.
+4) Nas configurações do Facebook Login, informe:
+   - Site URL: http://localhost:5176
+   - App Domains: localhost
+   - Se usar outras portas, ajuste a URL do site para a porta ativa do Vite.
+5) Garanta que o app está no modo de desenvolvimento (para testes locais). Em produção, configure o modo Live.
+6) Copie o "App ID" do aplicativo.
+7) No arquivo web/.env, defina:
+   VITE_FACEBOOK_APP_ID=SEU_APP_ID_DO_FACEBOOK
+8) Reinicie o frontend: npm run dev.
+
+Validação
+- Abra o app (http://localhost:5176) e vá para a tela de login.
+- Com as variáveis configuradas, os logins Google e Facebook devem estar habilitados.
+- Ao logar com Google, o navegador exibirá o One Tap (ou o fluxo do botão Google) e o backend trocará o id_token por JWT.
+- Ao logar com Facebook, o SDK fornecerá access_token e o backend trocará por JWT.
+
+Dicas de solução de problemas
+- Limpe o cache do navegador se as variáveis parecerem não atualizar.
+- Verifique o console do navegador para mensagens de erro (SDK bloqueado, pop-ups bloqueados, etc.).
+- Confirme que o backend está acessível em http://127.0.0.1:8000.
+- Garanta que as origens/URLs configuradas no Google/Facebook correspondem exatamente ao endereço/porta do frontend.

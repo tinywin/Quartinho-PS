@@ -17,6 +17,7 @@ import '../imoveis/imovel_detalhe_page.dart';
 import 'package:mobile/pages/imoveis/search_results_page.dart';
 
 import '../../core/services/auth_service.dart';
+import 'package:mobile/pages/profile/preference_switch_page.dart';
 import '../../core/constants.dart';
 import '../../core/utils/property_utils.dart';
 import 'package:mobile/pages/profile/profile_page.dart';
@@ -49,6 +50,7 @@ class _InicialPageState extends State<InicialPage> {
   int _navIndex = 0;
   String? _avatarUrl;
   int? _myUserId;
+  String? _userPreference; // 'room' ou 'roommate'
 
   /// lista dinâmica com os imóveis criados pelo usuário logado
   final List<Map<String, dynamic>> _meusAnuncios = [];
@@ -57,6 +59,8 @@ class _InicialPageState extends State<InicialPage> {
   final List<Map<String, dynamic>> _sugestoes = [];
 
   bool _loadingSugestoes = false;
+  // Temporariamente desativa blocos de localização e pesquisa na Home
+  final bool _showLocationAndSearch = false;
 
   // Primeiro nome para o header ("Oi, ...!")
   String get _firstName {
@@ -157,6 +161,9 @@ class _InicialPageState extends State<InicialPage> {
 
       // id do usuário
   _myUserId = _tryParseUserId(me);
+
+      // preferência do usuário (para habilitar/desabilitar cadastro de imóvel)
+      _userPreference = me?['preference']?.toString();
 
       setState(() {});
     } catch (_) {}
@@ -329,8 +336,13 @@ class _InicialPageState extends State<InicialPage> {
       // Endpoint geral de propriedades (ajuste se o seu for outro)
       final uri = Uri.parse('$backendHost/propriedades/propriedades/').replace(
         queryParameters: {
+          // aplicar categoria quando não for "Tudo"
           if (_selectedCategory != 0)
             'tipo': _categories[_selectedCategory].toLowerCase(), // casa|apartamento|kitnet
+          // garantir ordenação por mais recentes
+          'ordering': '-data_criacao',
+          // limitar para pelo menos 10 itens
+          'page_size': '10',
         },
       );
 
@@ -343,7 +355,13 @@ class _InicialPageState extends State<InicialPage> {
       );
 
       if (resp.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(resp.body) as List<dynamic>;
+        final decoded = jsonDecode(resp.body);
+        // Resposta pode ser paginada (objeto com 'results') ou lista simples
+        final List<dynamic> data = decoded is List<dynamic>
+            ? decoded
+            : (decoded is Map<String, dynamic> && decoded['results'] is List<dynamic>
+                ? List<dynamic>.from(decoded['results'] as List)
+                : <dynamic>[]);
 
         // IDs dos meus anúncios para evitar duplicatas
         final myIds = _meusAnuncios.map((e) => e['id']).toSet();
@@ -396,11 +414,14 @@ class _InicialPageState extends State<InicialPage> {
                   name: _firstName,
                   avatarBytes: widget.avatarBytes,
                   avatarUrl: _avatarUrl,
-                  onAdd: _abrirCriarImovel,
+                  // Disponibiliza o botão de adicionar imóvel apenas para quem é "roommate" (locador)
+                  onAdd: _userPreference == 'roommate' ? _abrirCriarImovel : null,
                 ),
                 const SizedBox(height: 16),
-                _LocationAndProfile(city: widget.city),
-                const SizedBox(height: 20),
+                if (_showLocationAndSearch) ...[
+                  _LocationAndProfile(city: widget.city),
+                  const SizedBox(height: 20),
+                ],
 
                 if (_meusAnuncios.isNotEmpty) ...[
                   const _SectionHeader(title: 'Meus anúncios'),
@@ -413,9 +434,10 @@ class _InicialPageState extends State<InicialPage> {
                   const SizedBox(height: 24),
                 ],
 
-                // Busca (mantida porque ajuda o usuário)
-                const _SearchBar(),
-                const SizedBox(height: 16),
+                if (_showLocationAndSearch) ...[
+                  const _SearchBar(),
+                  const SizedBox(height: 16),
+                ],
 
                 // Filtro de categoria (aplica nas sugestões)
                 _CategoryChips(
@@ -460,7 +482,9 @@ class _InicialPageState extends State<InicialPage> {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginHomePage()));
               return;
             }
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()));
+            await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()));
+            // Ao retornar do Perfil, recarrega o usuário para atualizar preferência sem relogar
+            await _loadMe();
             return;
           }
           // Aba Buscar: abrir tela de resultados
@@ -573,6 +597,17 @@ class _Header extends StatelessWidget {
                       try {
                         Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()));
                       } catch (_) {}
+                    } else if (v == 'settings') {
+                      final token = await AuthService.getSavedToken();
+                      if (token == null) {
+                        try {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginHomePage()));
+                        } catch (_) {}
+                        return;
+                      }
+                      try {
+                        await Navigator.push(context, MaterialPageRoute(builder: (_) => const PreferenceSwitchPage()));
+                      } catch (_) {}
                     } else if (v == 'contratos') {
                       // abrir página de contratos (placeholder)
                       try {
@@ -591,6 +626,7 @@ class _Header extends StatelessWidget {
                   },
                   itemBuilder: (_) => const [
                     PopupMenuItem(value: 'perfil', child: Text('Perfil')),
+                    PopupMenuItem(value: 'settings', child: Text('Configurações')),
                     PopupMenuItem(value: 'contratos', child: Text('Contratos')),
                     PopupMenuItem(value: 'logout', child: Text('Sair')),
                   ],
@@ -1122,24 +1158,44 @@ class _SugestoesGrid extends StatelessWidget {
           final title = m['titulo']?.toString() ?? '';
           final preco = m['preco']?.toString() ?? m['preco_total']?.toString() ?? '';
 
-          return GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ImovelDetalhePage(imovel: m),
+          return StatefulBuilder(
+            builder: (ctx, setSt) {
+              bool fav = m['favorito'] == true;
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ImovelDetalhePage(imovel: m),
+                    ),
+                  );
+                },
+                child: _PropertyCard(
+                  item: _Property(
+                    title: title,
+                    image: foto,
+                    price: preco.isEmpty ? '-' : 'R\$ $preco',
+                    rating: (m['rating'] is num) ? (m['rating'] as num).toDouble() : double.tryParse((m['rating'] ?? '').toString()) ?? 0.0,
+                    distance: '-',
+                  ),
+                  favorito: fav,
+                  onToggleFavorite: () async {
+                    final token = await AuthService.getSavedToken();
+                    if (token == null) return;
+                    final id = m['id'];
+                    if (id == null) return;
+                    final int pid = id is int ? id : int.tryParse(id.toString()) ?? -1;
+                    if (pid < 0) return;
+                    final res = await FavoritesService.toggleFavorite(pid, token: token);
+                    if (res != null) {
+                      setSt(() {
+                        m['favorito'] = res;
+                      });
+                    }
+                  },
                 ),
               );
             },
-            child: _PropertyCard(
-                item: _Property(
-                  title: title,
-                  image: foto,
-                  price: preco.isEmpty ? '-' : 'R\$ $preco',
-                  rating: (m['rating'] is num) ? (m['rating'] as num).toDouble() : double.tryParse((m['rating'] ?? '').toString()) ?? 0.0,
-                  distance: '-',
-                ),
-              ),
           );
         },
       ),
@@ -1166,8 +1222,10 @@ class _Property {
 }
 
 class _PropertyCard extends StatelessWidget {
-  const _PropertyCard({required this.item});
+  const _PropertyCard({required this.item, this.favorito = false, this.onToggleFavorite});
   final _Property item;
+  final bool favorito;
+  final VoidCallback? onToggleFavorite;
 
   @override
   Widget build(BuildContext context) {
@@ -1225,13 +1283,21 @@ class _PropertyCard extends StatelessWidget {
               Positioned(
                 right: 10,
                 top: 10,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
+                child: InkWell(
+                  onTap: onToggleFavorite,
+                  customBorder: const CircleBorder(),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      favorito ? Icons.favorite : Icons.favorite_border,
+                      size: 18,
+                      color: favorito ? Colors.redAccent : Colors.black,
+                    ),
                   ),
-                  child: const Icon(Icons.favorite_border, size: 18),
                 ),
               ),
             ],

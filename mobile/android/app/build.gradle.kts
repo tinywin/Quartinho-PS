@@ -28,6 +28,8 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["facebookAppId"] = "COLOQUE_SEU_FACEBOOK_APP_ID"
+        manifestPlaceholders["facebookClientToken"] = "COLOQUE_SEU_FACEBOOK_CLIENT_TOKEN"
     }
 
     buildTypes {

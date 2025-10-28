@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+
 import '../../core/services/auth_service.dart';
 import '../../core/constants.dart';
 
@@ -22,6 +23,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _cpfCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
   DateTime? _birth;
   Uint8List? _avatarBytes;
   String? _avatarUrl;
@@ -62,20 +64,28 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   Future<void> _loadMe() async {
     final token = await AuthService.getSavedToken();
-    if (token == null) return;
-    final me = await AuthService.me(token: token);
-    if (!mounted) return;
-    setState(() {
-      _loading = false;
-      _nameCtrl.text = (me?['username'] ?? '') as String;
-      _emailCtrl.text = (me?['email'] ?? '') as String;
-      _cpfCtrl.text = (me?['cpf'] ?? '') as String;
-  _avatarUrl = _normalizeAvatarUrl((me?['avatar'] ?? '') as String?);
-      try {
-        final d = me?['data_nascimento'];
-        if (d is String && d.isNotEmpty) _birth = DateTime.parse(d);
-      } catch (_) {}
-    });
+    try {
+      if (token == null) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+      final me = await AuthService.me(token: token);
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _nameCtrl.text = (me?['username'] ?? '') as String;
+        _emailCtrl.text = (me?['email'] ?? '') as String;
+        _cpfCtrl.text = (me?['cpf'] ?? '') as String;
+        _phoneCtrl.text = (me?['telefone'] ?? '') as String;
+        _avatarUrl = _normalizeAvatarUrl((me?['avatar'] ?? '') as String?);
+        try {
+          final d = me?['data_nascimento'];
+          if (d is String && d.isNotEmpty) _birth = DateTime.parse(d);
+        } catch (_) {}
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _pickAvatar() async {
@@ -95,7 +105,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     final body = <String, dynamic>{
       'username': _nameCtrl.text.trim(),
       'email': _emailCtrl.text.trim(),
-      'cpf': _cpfCtrl.text.trim(),
+      'telefone': _phoneCtrl.text.trim(),
       'data_nascimento': _birth != null ? _birth!.toIso8601String().substring(0, 10) : null,
     }..removeWhere((k, v) => v == null || (v is String && v.isEmpty));
 
@@ -144,6 +154,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _cpfCtrl.dispose();
+    _phoneCtrl.dispose();
     super.dispose();
   }
 
@@ -185,18 +196,28 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       TextFormField(
                         controller: _nameCtrl,
                         decoration: const InputDecoration(labelText: 'Nome completo'),
-                        validator: (v) => v == null || v.isEmpty ? 'Informe seu nome' : null,
+                        // Removida validação obrigatória para permitir edição individual
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _emailCtrl,
                         decoration: const InputDecoration(labelText: 'Email'),
-                        validator: (v) => v == null || v.isEmpty ? 'Informe seu email' : null,
+                        keyboardType: TextInputType.emailAddress,
+                        // Removida validação obrigatória para permitir edição individual
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _cpfCtrl,
                         decoration: const InputDecoration(labelText: 'CPF'),
+                        readOnly: true,
+                        style: const TextStyle(color: Colors.grey),
+                        // impede edição de CPF conforme requisito
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _phoneCtrl,
+                        decoration: const InputDecoration(labelText: 'Telefone'),
+                        keyboardType: TextInputType.phone,
                       ),
                       const SizedBox(height: 12),
                       Row(
