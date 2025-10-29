@@ -17,6 +17,7 @@ import '../imoveis/imovel_detalhe_page.dart';
 import 'package:mobile/pages/imoveis/search_results_page.dart';
 
 import '../../core/services/auth_service.dart';
+import 'package:mobile/pages/profile/preference_switch_page.dart';
 import '../../core/constants.dart';
 import '../../core/utils/property_utils.dart';
 import 'package:mobile/pages/profile/profile_page.dart';
@@ -24,6 +25,9 @@ import 'package:mobile/pages/profile/contratos_page.dart';
 import 'package:mobile/pages/login/login_home_page.dart';
 import 'package:mobile/pages/inicial/favorites_page.dart';
 import 'package:mobile/core/services/favorites_service.dart';
+import 'package:mobile/pages/notificacoes/notificacao_page.dart';
+import 'package:mobile/core/services/notification_service.dart';
+import 'package:mobile/pages/notificacoes/notificacao_page.dart';
 
 class InicialPage extends StatefulWidget {
   final String name; // nome completo do usuário
@@ -43,12 +47,19 @@ class InicialPage extends StatefulWidget {
 
 class _InicialPageState extends State<InicialPage> {
   /// categorias para filtrar sugestões
-  final List<String> _categories = const ['Tudo', 'Casa', 'Apartamento', 'Kitnet'];
+  final List<String> _categories = const [
+    'Tudo',
+    'Casa',
+    'Apartamento',
+    'Kitnet',
+  ];
   int _selectedCategory = 0;
 
   int _navIndex = 0;
   String? _avatarUrl;
   int? _myUserId;
+  String? _userPreference; // 'room' ou 'roommate'
+  int _notificationCount = 0;
 
   /// lista dinâmica com os imóveis criados pelo usuário logado
   final List<Map<String, dynamic>> _meusAnuncios = [];
@@ -57,6 +68,8 @@ class _InicialPageState extends State<InicialPage> {
   final List<Map<String, dynamic>> _sugestoes = [];
 
   bool _loadingSugestoes = false;
+  // Temporariamente desativa blocos de localização e pesquisa na Home
+  final bool _showLocationAndSearch = false;
 
   // Primeiro nome para o header ("Oi, ...!")
   String get _firstName {
@@ -64,7 +77,9 @@ class _InicialPageState extends State<InicialPage> {
     if (n.isEmpty) return 'usuário';
     final parts = n.split(RegExp(r'\s+'));
     final first = parts.first;
-    return first.isEmpty ? 'usuário' : first[0].toUpperCase() + first.substring(1);
+    return first.isEmpty
+        ? 'usuário'
+        : first[0].toUpperCase() + first.substring(1);
   }
 
   // header text style (kept inline where used)
@@ -72,26 +87,30 @@ class _InicialPageState extends State<InicialPage> {
   Future<void> _abrirCriarImovel() async {
     final novo = await Navigator.push<Map<String, dynamic>?>(
       context,
-      MaterialPageRoute(builder: (_) => CriarImoveisPage(firstName: _firstName)),
+      MaterialPageRoute(
+        builder: (_) => CriarImoveisPage(firstName: _firstName),
+      ),
     );
 
     if (novo != null) {
-      final tipoImovel = (novo['tipo_imovel'] ?? '').toString(); // apartamento|casa|kitnet
-      final tipo = {
-        'apartamento': 'Apartamento',
-        'casa': 'Casa',
-        'kitnet': 'Kitnet',
-      }[tipoImovel] ?? (novo['tipo']?.toString() ?? 'Anúncio');
+      final tipoImovel = (novo['tipo_imovel'] ?? '')
+          .toString(); // apartamento|casa|kitnet
+      final tipo =
+          {
+            'apartamento': 'Apartamento',
+            'casa': 'Casa',
+            'kitnet': 'Kitnet',
+          }[tipoImovel] ??
+          (novo['tipo']?.toString() ?? 'Anúncio');
 
       setState(() {
-        _meusAnuncios.insert(0, {
-          ...novo,
-          'tipo': tipo,
-        });
+        _meusAnuncios.insert(0, {...novo, 'tipo': tipo});
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Imóvel adicionado à seção "Meus anúncios".')),
+        const SnackBar(
+          content: Text('Imóvel adicionado à seção "Meus anúncios".'),
+        ),
       );
 
       // após criar, recarrega sugestões para evitar mostrar o seu próprio como sugestão
@@ -107,10 +126,8 @@ class _InicialPageState extends State<InicialPage> {
 
   Future<void> _bootstrap() async {
     // carrega "me" e "minhas_propriedades" antes de sugerir
-    await Future.wait(<Future<void>>[
-      _loadMe(),
-      _loadMinhasPropriedades(),
-    ]);
+    await Future.wait(<Future<void>>[_loadMe(), _loadMinhasPropriedades()]);
+    _loadNotificationCount();
     await _loadSugestoes();
   }
 
@@ -156,7 +173,10 @@ class _InicialPageState extends State<InicialPage> {
       }
 
       // id do usuário
-  _myUserId = _tryParseUserId(me);
+      _myUserId = _tryParseUserId(me);
+
+      // preferência do usuário (para habilitar/desabilitar cadastro de imóvel)
+      _userPreference = me?['preference']?.toString();
 
       setState(() {});
     } catch (_) {}
@@ -170,20 +190,31 @@ class _InicialPageState extends State<InicialPage> {
 
     if (atualizado != null && mounted) {
       setState(() {
-        final idx = _meusAnuncios.indexWhere((e) => e['id'] == atualizado['id']);
+        final idx = _meusAnuncios.indexWhere(
+          (e) => e['id'] == atualizado['id'],
+        );
         if (idx >= 0) {
           _meusAnuncios[idx] = {
             ..._meusAnuncios[idx],
             'titulo': atualizado['titulo'] ?? _meusAnuncios[idx]['titulo'],
-            'endereco': atualizado['endereco'] ?? _meusAnuncios[idx]['endereco'],
-            'preco': atualizado['preco']?.toString() ?? _meusAnuncios[idx]['preco'],
-            'periodicidade': atualizado['periodicidade'] ?? _meusAnuncios[idx]['periodicidade'],
-            'tipo_imovel': atualizado['tipo'] ?? atualizado['categoria'] ?? _meusAnuncios[idx]['tipo_imovel'],
+            'endereco':
+                atualizado['endereco'] ?? _meusAnuncios[idx]['endereco'],
+            'preco':
+                atualizado['preco']?.toString() ?? _meusAnuncios[idx]['preco'],
+            'periodicidade':
+                atualizado['periodicidade'] ??
+                _meusAnuncios[idx]['periodicidade'],
+            'tipo_imovel':
+                atualizado['tipo'] ??
+                atualizado['categoria'] ??
+                _meusAnuncios[idx]['tipo_imovel'],
           };
         }
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Imóvel atualizado.')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Imóvel atualizado.')));
 
       // Atualiza sugestões após editar (por via das dúvidas)
       _loadSugestoes();
@@ -196,10 +227,18 @@ class _InicialPageState extends State<InicialPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Excluir imóvel'),
-        content: const Text('Tem certeza que deseja excluir este imóvel? Esta ação não pode ser desfeita.'),
+        content: const Text(
+          'Tem certeza que deseja excluir este imóvel? Esta ação não pode ser desfeita.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Excluir')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Excluir'),
+          ),
         ],
       ),
     );
@@ -211,10 +250,13 @@ class _InicialPageState extends State<InicialPage> {
       if (token == null) return;
 
       final url = Uri.parse('$backendHost/propriedades/propriedades/$id/');
-      final resp = await http.delete(url, headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      });
+      final resp = await http.delete(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
 
       if (resp.statusCode == 204 || resp.statusCode == 200) {
         if (mounted) {
@@ -222,7 +264,9 @@ class _InicialPageState extends State<InicialPage> {
             _meusAnuncios.removeWhere((e) => e['id'] == id);
           });
         }
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Imóvel excluído.')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Imóvel excluído.')));
         // Atualiza sugestões para garantir que não aparece seu próprio imóvel
         _loadSugestoes();
       } else if (resp.statusCode == 401) {
@@ -230,12 +274,16 @@ class _InicialPageState extends State<InicialPage> {
       } else {
         // ignore: avoid_print
         print('Erro ao excluir imóvel: ${resp.statusCode} ${resp.body}');
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Falha ao excluir imóvel')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Falha ao excluir imóvel')),
+        );
       }
     } catch (e) {
       // ignore: avoid_print
       print('Exception ao excluir imóvel: $e');
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro na requisição')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Erro na requisição')));
     }
   }
 
@@ -245,32 +293,48 @@ class _InicialPageState extends State<InicialPage> {
       final token = await AuthService.getSavedToken();
       if (token == null) return;
 
-      final url = Uri.parse('$backendHost/propriedades/propriedades/minhas_propriedades/');
-      final resp = await http.get(url, headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      });
+      final url = Uri.parse(
+        '$backendHost/propriedades/propriedades/minhas_propriedades/',
+      );
+      final resp = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
 
       if (resp.statusCode == 200) {
         final List<dynamic> data = jsonDecode(resp.body) as List<dynamic>;
-        final List<Map<String, dynamic>> anuncios = data.map<Map<String, dynamic>>((e) {
-          final m = Map<String, dynamic>.from(e as Map);
-          return {
-            'id': m['id'],
-            'titulo': m['titulo'] ?? '',
-            'endereco': m['endereco'] ?? '',
-            'preco': m['preco']?.toString() ?? '',
-            'periodicidade': m['periodicidade'] ?? 'mensal',
-            'tipo_imovel': m['tipo'] ?? m['categoria'] ?? '',
-            // Para meus anúncios usamos fotos_paths (como já estava)
-            'fotos_paths': (m['fotos'] as List<dynamic>?)
-                    ?.map((f) => (f is Map && f['imagem'] != null) ? f['imagem'] as String : f.toString())
-                    .toList() ??
-                <String>[],
-            // guardamos também possível dono/autor para referência
-            'owner_id': m['owner_id'] ?? m['usuario_id'] ?? m['user_id'] ?? m['proprietario_id'],
-          };
-        }).toList();
+        final List<Map<String, dynamic>> anuncios = data
+            .map<Map<String, dynamic>>((e) {
+              final m = Map<String, dynamic>.from(e as Map);
+              return {
+                'id': m['id'],
+                'titulo': m['titulo'] ?? '',
+                'endereco': m['endereco'] ?? '',
+                'preco': m['preco']?.toString() ?? '',
+                'periodicidade': m['periodicidade'] ?? 'mensal',
+                'tipo_imovel': m['tipo'] ?? m['categoria'] ?? '',
+                // Para meus anúncios usamos fotos_paths (como já estava)
+                'fotos_paths':
+                    (m['fotos'] as List<dynamic>?)
+                        ?.map(
+                          (f) => (f is Map && f['imagem'] != null)
+                              ? f['imagem'] as String
+                              : f.toString(),
+                        )
+                        .toList() ??
+                    <String>[],
+                // guardamos também possível dono/autor para referência
+                'owner_id':
+                    m['owner_id'] ??
+                    m['usuario_id'] ??
+                    m['user_id'] ??
+                    m['proprietario_id'],
+              };
+            })
+            .toList();
 
         if (mounted) {
           setState(() {
@@ -283,7 +347,9 @@ class _InicialPageState extends State<InicialPage> {
         await AuthService.logout();
       } else {
         // ignore: avoid_print
-        print('Erro ao buscar minhas propriedades: ${resp.statusCode} ${resp.body}');
+        print(
+          'Erro ao buscar minhas propriedades: ${resp.statusCode} ${resp.body}',
+        );
       }
     } catch (e) {
       // ignore: avoid_print
@@ -329,8 +395,14 @@ class _InicialPageState extends State<InicialPage> {
       // Endpoint geral de propriedades (ajuste se o seu for outro)
       final uri = Uri.parse('$backendHost/propriedades/propriedades/').replace(
         queryParameters: {
+          // aplicar categoria quando não for "Tudo"
           if (_selectedCategory != 0)
-            'tipo': _categories[_selectedCategory].toLowerCase(), // casa|apartamento|kitnet
+            'tipo': _categories[_selectedCategory]
+                .toLowerCase(), // casa|apartamento|kitnet
+          // garantir ordenação por mais recentes
+          'ordering': '-data_criacao',
+          // limitar para pelo menos 10 itens
+          'page_size': '10',
         },
       );
 
@@ -343,7 +415,14 @@ class _InicialPageState extends State<InicialPage> {
       );
 
       if (resp.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(resp.body) as List<dynamic>;
+        final decoded = jsonDecode(resp.body);
+        // Resposta pode ser paginada (objeto com 'results') ou lista simples
+        final List<dynamic> data = decoded is List<dynamic>
+            ? decoded
+            : (decoded is Map<String, dynamic> &&
+                      decoded['results'] is List<dynamic>
+                  ? List<dynamic>.from(decoded['results'] as List)
+                  : <dynamic>[]);
 
         // IDs dos meus anúncios para evitar duplicatas
         final myIds = _meusAnuncios.map((e) => e['id']).toSet();
@@ -379,6 +458,33 @@ class _InicialPageState extends State<InicialPage> {
     }
   }
 
+// 2. CRIE A FUNÇÃO PARA CARREGAR A CONTAGEM
+  Future<void> _loadNotificationCount() async {
+    final token = await AuthService.getSavedToken();
+    if (token == null) return; // Se não tem token, não faz nada
+
+    final count = await NotificationService.getUnreadCount(token: token);
+    
+    if (mounted) {
+      setState(() {
+        _notificationCount = count;
+      });
+    }
+  }
+  
+  // 4. CRIE A FUNÇÃO QUE ABRE A TELA E ATUALIZA A CONTAGEM
+  Future<void> _abrirNotificacoes() async {
+    // Navega para a tela de notificações e ESPERA ela ser fechada
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const TelaNotificacao()),
+    );
+    
+    // Quando o usuário voltar (fechar a tela),
+    // recarregamos a contagem para atualizar o 'badge'
+    _loadNotificationCount();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -396,11 +502,18 @@ class _InicialPageState extends State<InicialPage> {
                   name: _firstName,
                   avatarBytes: widget.avatarBytes,
                   avatarUrl: _avatarUrl,
-                  onAdd: _abrirCriarImovel,
+                  // Disponibiliza o botão de adicionar imóvel apenas para quem é "roommate" (locador)
+                  onAdd: _userPreference == 'roommate'
+                      ? _abrirCriarImovel
+                      : null,
+                      notificationCount: _notificationCount,
+                      onNotificationIconPressed: _abrirNotificacoes,
                 ),
                 const SizedBox(height: 16),
-                _LocationAndProfile(city: widget.city),
-                const SizedBox(height: 20),
+                if (_showLocationAndSearch) ...[
+                  _LocationAndProfile(city: widget.city),
+                  const SizedBox(height: 20),
+                ],
 
                 if (_meusAnuncios.isNotEmpty) ...[
                   const _SectionHeader(title: 'Meus anúncios'),
@@ -413,9 +526,10 @@ class _InicialPageState extends State<InicialPage> {
                   const SizedBox(height: 24),
                 ],
 
-                // Busca (mantida porque ajuda o usuário)
-                const _SearchBar(),
-                const SizedBox(height: 16),
+                if (_showLocationAndSearch) ...[
+                  const _SearchBar(),
+                  const SizedBox(height: 16),
+                ],
 
                 // Filtro de categoria (aplica nas sugestões)
                 _CategoryChips(
@@ -441,7 +555,10 @@ class _InicialPageState extends State<InicialPage> {
                 else if (_sugestoes.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Text('Sem sugestões no momento.', style: GoogleFonts.poppins(fontSize: 14)),
+                    child: Text(
+                      'Sem sugestões no momento.',
+                      style: GoogleFonts.poppins(fontSize: 14),
+                    ),
                   )
                 else
                   _SugestoesGrid(items: _sugestoes),
@@ -457,30 +574,52 @@ class _InicialPageState extends State<InicialPage> {
           if (i == 3) {
             final token = await AuthService.getSavedToken();
             if (token == null) {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginHomePage()));
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginHomePage()),
+              );
               return;
             }
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()));
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ProfilePage()),
+            );
+            // Ao retornar do Perfil, recarrega o usuário para atualizar preferência sem relogar
+            await _loadMe();
             return;
           }
           // Aba Buscar: abrir tela de resultados
           if (i == 1) {
             final token = await AuthService.getSavedToken();
             if (token == null) {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginHomePage()));
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginHomePage()),
+              );
               return;
             }
-            Navigator.push(context, MaterialPageRoute(builder: (_) => SearchResultsPage(token: token)));
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => SearchResultsPage(token: token),
+              ),
+            );
             return;
           }
           // Aba Favoritos: abrir lista de favoritos
           if (i == 2) {
             final token = await AuthService.getSavedToken();
             if (token == null) {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginHomePage()));
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginHomePage()),
+              );
               return;
             }
-            Navigator.push(context, MaterialPageRoute(builder: (_) => FavoritesPage(token: token)));
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => FavoritesPage(token: token)),
+            );
             return;
           }
           setState(() => _navIndex = i);
@@ -489,10 +628,19 @@ class _InicialPageState extends State<InicialPage> {
         // withOpacity -> withValues (lint fix)
         indicatorColor: const Color(0xFF6E56CF).withValues(alpha: 0.10),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Início'),
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            label: 'Início',
+          ),
           NavigationDestination(icon: Icon(Icons.search), label: 'Buscar'),
-          NavigationDestination(icon: Icon(Icons.favorite_border), label: 'Favoritos'),
-          NavigationDestination(icon: Icon(Icons.person_outline), label: 'Perfil'),
+          NavigationDestination(
+            icon: Icon(Icons.favorite_border),
+            label: 'Favoritos',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            label: 'Perfil',
+          ),
         ],
       ),
     );
@@ -506,11 +654,24 @@ class _Header extends StatelessWidget {
   final Uint8List? avatarBytes; // bytes do avatar (opcional)
   final String? avatarUrl; // optional remote avatar url
   final VoidCallback? onAdd;
+  final int notificationCount;
+  final VoidCallback onNotificationIconPressed;   
 
-  const _Header({required this.name, this.avatarBytes, this.avatarUrl, this.onAdd});
+  const _Header({
+    required this.name,
+    this.avatarBytes,
+    this.avatarUrl,
+    this.onAdd,
+    required this.notificationCount,
+    required this.onNotificationIconPressed,    
+  });
 
   String _initials(String n) {
-    final parts = n.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
+    final parts = n
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((e) => e.isNotEmpty)
+        .toList();
     if (parts.isEmpty) return 'U';
     final first = parts.first[0].toUpperCase();
     final second = parts.length > 1 ? parts[1][0].toUpperCase() : '';
@@ -558,7 +719,22 @@ class _Header extends StatelessWidget {
                     tooltip: 'Adicionar imóvel',
                   ),
                 const SizedBox(width: 6),
-                const Icon(Icons.notifications_none_rounded),
+
+                Badge(
+                  // Mostra a bolinha com o número
+                  label: Text(notificationCount.toString()),
+                  
+                  // Só mostra o 'badge' se a contagem for maior que 0
+                  isLabelVisible: notificationCount > 0,
+                  
+                  // O seu botão continua aqui dentro
+                  child: IconButton(
+                    icon: const Icon(Icons.notifications_none_rounded),
+                    // 8. USE A FUNÇÃO QUE VEIO DO PAI
+                    onPressed: onNotificationIconPressed, 
+                  ),
+                ),
+
                 const SizedBox(width: 10),
                 PopupMenuButton<String>(
                   onSelected: (v) async {
@@ -566,24 +742,62 @@ class _Header extends StatelessWidget {
                       final token = await AuthService.getSavedToken();
                       if (token == null) {
                         try {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginHomePage()));
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const LoginHomePage(),
+                            ),
+                          );
                         } catch (_) {}
                         return;
                       }
                       try {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()));
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ProfilePage(),
+                          ),
+                        );
+                      } catch (_) {}
+                    } else if (v == 'settings') {
+                      final token = await AuthService.getSavedToken();
+                      if (token == null) {
+                        try {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const LoginHomePage(),
+                            ),
+                          );
+                        } catch (_) {}
+                        return;
+                      }
+                      try {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const PreferenceSwitchPage(),
+                          ),
+                        );
                       } catch (_) {}
                     } else if (v == 'contratos') {
                       // abrir página de contratos (placeholder)
                       try {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const ContratosPage()));
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ContratosPage(),
+                          ),
+                        );
                       } catch (_) {}
                     } else if (v == 'logout') {
                       await AuthService.logout();
                       try {
                         Navigator.pushAndRemoveUntil(
                           context,
-                          MaterialPageRoute(builder: (_) => const LoginHomePage()),
+                          MaterialPageRoute(
+                            builder: (_) => const LoginHomePage(),
+                          ),
                           (route) => false,
                         );
                       } catch (_) {}
@@ -591,6 +805,10 @@ class _Header extends StatelessWidget {
                   },
                   itemBuilder: (_) => const [
                     PopupMenuItem(value: 'perfil', child: Text('Perfil')),
+                    PopupMenuItem(
+                      value: 'settings',
+                      child: Text('Configurações'),
+                    ),
                     PopupMenuItem(value: 'contratos', child: Text('Contratos')),
                     PopupMenuItem(value: 'logout', child: Text('Sair')),
                   ],
@@ -599,10 +817,12 @@ class _Header extends StatelessWidget {
                     backgroundImage: avatarBytes != null
                         ? MemoryImage(avatarBytes!)
                         : (avatarUrl != null && avatarUrl!.isNotEmpty)
-                            ? NetworkImage(avatarUrl!) as ImageProvider
-                            : null,
+                        ? NetworkImage(avatarUrl!) as ImageProvider
+                        : null,
                     backgroundColor: const Color(0xFFE7E7EF),
-                    child: (avatarBytes == null && (avatarUrl == null || avatarUrl!.isEmpty))
+                    child:
+                        (avatarBytes == null &&
+                            (avatarUrl == null || avatarUrl!.isEmpty))
                         ? Text(
                             _initials(name),
                             style: GoogleFonts.poppins(
@@ -655,7 +875,7 @@ class _LocationAndProfile extends StatelessWidget {
                     color: Colors.black.withValues(alpha: .05),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
-                  )
+                  ),
                 ],
               ),
               child: Row(
@@ -702,7 +922,11 @@ class _MeusAnunciosList extends StatelessWidget {
   final List<Map<String, dynamic>> items;
   final void Function(Map<String, dynamic>) onEdit;
   final void Function(Map<String, dynamic>) onDelete;
-  const _MeusAnunciosList({required this.items, required this.onEdit, required this.onDelete});
+  const _MeusAnunciosList({
+    required this.items,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -711,8 +935,11 @@ class _MeusAnunciosList extends StatelessWidget {
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         scrollDirection: Axis.horizontal,
-        itemBuilder: (context, index) =>
-            _MeuAnuncioCard(dados: items[index], onEdit: onEdit, onDelete: onDelete),
+        itemBuilder: (context, index) => _MeuAnuncioCard(
+          dados: items[index],
+          onEdit: onEdit,
+          onDelete: onDelete,
+        ),
         separatorBuilder: (_, __) => const SizedBox(width: 14),
         itemCount: items.length,
       ),
@@ -761,7 +988,9 @@ class _MeuAnuncioCard extends StatelessWidget {
         }
       } else {
         final file = File(first);
-        thumbWidget = file.existsSync() ? Image.file(file, fit: BoxFit.cover) : _fallbackThumb();
+        thumbWidget = file.existsSync()
+            ? Image.file(file, fit: BoxFit.cover)
+            : _fallbackThumb();
       }
     } else {
       thumbWidget = _fallbackThumb();
@@ -776,13 +1005,22 @@ class _MeuAnuncioCard extends StatelessWidget {
           final resp = await http.get(
             url,
             headers: token != null
-                ? {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'}
+                ? {
+                    'Authorization': 'Bearer $token',
+                    'Content-Type': 'application/json',
+                  }
                 : {'Content-Type': 'application/json'},
           );
 
           if (resp.statusCode == 200) {
-            final Map<String, dynamic> full = jsonDecode(resp.body) as Map<String, dynamic>;
-            Navigator.push(context, MaterialPageRoute(builder: (_) => ImovelDetalhePage(imovel: full)));
+            final Map<String, dynamic> full =
+                jsonDecode(resp.body) as Map<String, dynamic>;
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ImovelDetalhePage(imovel: full),
+              ),
+            );
             return;
           } else if (resp.statusCode == 401) {
             await AuthService.logout();
@@ -790,7 +1028,10 @@ class _MeuAnuncioCard extends StatelessWidget {
         } catch (_) {}
 
         // fallback: abrir com os dados que temos
-        Navigator.push(context, MaterialPageRoute(builder: (_) => ImovelDetalhePage(imovel: dados)));
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => ImovelDetalhePage(imovel: dados)),
+        );
       },
       child: Container(
         width: 260,
@@ -802,7 +1043,7 @@ class _MeuAnuncioCard extends StatelessWidget {
               color: const Color(0xFF000000).withValues(alpha: .06),
               blurRadius: 10,
               offset: const Offset(0, 6),
-            )
+            ),
           ],
         ),
         child: Column(
@@ -821,20 +1062,29 @@ class _MeuAnuncioCard extends StatelessWidget {
                     SizedBox.expand(
                       child: FittedBox(
                         fit: BoxFit.cover,
-                        child: SizedBox(width: 1, height: 1, child: thumbWidget),
+                        child: SizedBox(
+                          width: 1,
+                          height: 1,
+                          child: thumbWidget,
+                        ),
                       ),
                     ),
                     Positioned(
                       left: 12,
                       bottom: 12,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFF8A34),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          periodicidade == 'mensal' ? 'R\$ $preco/mês' : 'R\$ $preco/ano',
+                          periodicidade == 'mensal'
+                              ? 'R\$ $preco/mês'
+                              : 'R\$ $preco/ano',
                           style: GoogleFonts.poppins(
                             color: Colors.white,
                             fontSize: 12.5,
@@ -858,15 +1108,23 @@ class _MeuAnuncioCard extends StatelessWidget {
                                 : () async {
                                     final id = dados['id'];
                                     if (id == null) return;
-                                    final res = await FavoritesService.toggleFavorite(id as int, token: token);
+                                    final res =
+                                        await FavoritesService.toggleFavorite(
+                                          id as int,
+                                          token: token,
+                                        );
                                     if (res != null) {
                                       dados['favorito'] = res;
                                       (ctx as Element).markNeedsBuild();
                                     }
                                   },
                             icon: Icon(
-                              dados['favorito'] == true ? Icons.favorite : Icons.favorite_border,
-                              color: dados['favorito'] == true ? Colors.redAccent : Colors.white,
+                              dados['favorito'] == true
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
+                              color: dados['favorito'] == true
+                                  ? Colors.redAccent
+                                  : Colors.white,
                             ),
                           );
                         },
@@ -957,7 +1215,7 @@ class _SearchBar extends StatelessWidget {
               color: Colors.black.withValues(alpha: .05),
               blurRadius: 12,
               offset: const Offset(0, 6),
-            )
+            ),
           ],
         ),
         child: Row(
@@ -971,10 +1229,18 @@ class _SearchBar extends StatelessWidget {
                 onTap: () async {
                   final token = await AuthService.getSavedToken();
                   if (token == null) {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginHomePage()));
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LoginHomePage()),
+                    );
                     return;
                   }
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => SearchResultsPage(token: token)));
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SearchResultsPage(token: token),
+                    ),
+                  );
                 },
                 decoration: InputDecoration(
                   hintText: 'Procure por kitnet, casa…',
@@ -990,16 +1256,21 @@ class _SearchBar extends StatelessWidget {
               onPressed: () async {
                 final token = await AuthService.getSavedToken();
                 if (token == null) {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginHomePage()));
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginHomePage()),
+                  );
                   return;
                 }
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => SearchResultsPage(token: token)),
+                  MaterialPageRoute(
+                    builder: (_) => SearchResultsPage(token: token),
+                  ),
                 );
               },
               icon: const Icon(Icons.mic_none_rounded),
-            )
+            ),
           ],
         ),
       ),
@@ -1116,30 +1387,63 @@ class _SugestoesGrid extends StatelessWidget {
         itemBuilder: (context, index) {
           final m = items[index];
           final fotos = m['fotos'] as List<dynamic>?;
-          final foto = (fotos != null && fotos.isNotEmpty && fotos[0] is Map && fotos[0]['imagem'] != null)
+          final foto =
+              (fotos != null &&
+                  fotos.isNotEmpty &&
+                  fotos[0] is Map &&
+                  fotos[0]['imagem'] != null)
               ? fotos[0]['imagem'].toString()
               : '';
           final title = m['titulo']?.toString() ?? '';
-          final preco = m['preco']?.toString() ?? m['preco_total']?.toString() ?? '';
+          final preco =
+              m['preco']?.toString() ?? m['preco_total']?.toString() ?? '';
 
-          return GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ImovelDetalhePage(imovel: m),
+          return StatefulBuilder(
+            builder: (ctx, setSt) {
+              bool fav = m['favorito'] == true;
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ImovelDetalhePage(imovel: m),
+                    ),
+                  );
+                },
+                child: _PropertyCard(
+                  item: _Property(
+                    title: title,
+                    image: foto,
+                    price: preco.isEmpty ? '-' : 'R\$ $preco',
+                    rating: (m['rating'] is num)
+                        ? (m['rating'] as num).toDouble()
+                        : double.tryParse((m['rating'] ?? '').toString()) ??
+                              0.0,
+                    distance: '-',
+                  ),
+                  favorito: fav,
+                  onToggleFavorite: () async {
+                    final token = await AuthService.getSavedToken();
+                    if (token == null) return;
+                    final id = m['id'];
+                    if (id == null) return;
+                    final int pid = id is int
+                        ? id
+                        : int.tryParse(id.toString()) ?? -1;
+                    if (pid < 0) return;
+                    final res = await FavoritesService.toggleFavorite(
+                      pid,
+                      token: token,
+                    );
+                    if (res != null) {
+                      setSt(() {
+                        m['favorito'] = res;
+                      });
+                    }
+                  },
                 ),
               );
             },
-            child: _PropertyCard(
-                item: _Property(
-                  title: title,
-                  image: foto,
-                  price: preco.isEmpty ? '-' : 'R\$ $preco',
-                  rating: (m['rating'] is num) ? (m['rating'] as num).toDouble() : double.tryParse((m['rating'] ?? '').toString()) ?? 0.0,
-                  distance: '-',
-                ),
-              ),
           );
         },
       ),
@@ -1166,8 +1470,14 @@ class _Property {
 }
 
 class _PropertyCard extends StatelessWidget {
-  const _PropertyCard({required this.item});
+  const _PropertyCard({
+    required this.item,
+    this.favorito = false,
+    this.onToggleFavorite,
+  });
   final _Property item;
+  final bool favorito;
+  final VoidCallback? onToggleFavorite;
 
   @override
   Widget build(BuildContext context) {
@@ -1180,7 +1490,7 @@ class _PropertyCard extends StatelessWidget {
             color: const Color(0xFF000000).withValues(alpha: .05),
             blurRadius: 10,
             offset: const Offset(0, 6),
-          )
+          ),
         ],
       ),
       child: Column(
@@ -1200,14 +1510,18 @@ class _PropertyCard extends StatelessWidget {
                         height: 130,
                         width: double.infinity,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _placeholderBox(height: 130),
+                        errorBuilder: (_, __, ___) =>
+                            _placeholderBox(height: 130),
                       ),
               ),
               Positioned(
                 left: 10,
                 bottom: 10,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFF8A34),
                     borderRadius: BorderRadius.circular(12),
@@ -1225,13 +1539,21 @@ class _PropertyCard extends StatelessWidget {
               Positioned(
                 right: 10,
                 top: 10,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
+                child: InkWell(
+                  onTap: onToggleFavorite,
+                  customBorder: const CircleBorder(),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      favorito ? Icons.favorite : Icons.favorite_border,
+                      size: 18,
+                      color: favorito ? Colors.redAccent : Colors.black,
+                    ),
                   ),
-                  child: const Icon(Icons.favorite_border, size: 18),
                 ),
               ),
             ],
@@ -1275,9 +1597,13 @@ class _PropertyCard extends StatelessWidget {
 /// ===== Helpers de placeholder (sem rede) =====
 
 Widget _placeholderBox({double height = 130, double? width}) => Container(
-      height: height,
-      width: width ?? double.infinity,
-      color: const Color(0xFFEFEFF5),
-      alignment: Alignment.center,
-      child: const Icon(Icons.image_not_supported_outlined, size: 28, color: Colors.grey),
-    );
+  height: height,
+  width: width ?? double.infinity,
+  color: const Color(0xFFEFEFF5),
+  alignment: Alignment.center,
+  child: const Icon(
+    Icons.image_not_supported_outlined,
+    size: 28,
+    color: Colors.grey,
+  ),
+);

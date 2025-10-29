@@ -20,6 +20,9 @@ urlpatterns = [
     
     # Endpoints do app propriedades
     path('propriedades/', include('propriedades.urls')),
+
+    # Endpoints do app notificações
+    path('notificacoes/', include('notificacoes.urls')),
 ]
 
 # Configuração para servir arquivos de mídia durante o desenvolvimento
