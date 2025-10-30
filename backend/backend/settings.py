@@ -32,7 +32,7 @@ ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.10.122', '10.248.216.227', '
 
 INSTALLED_APPS = [
     'usuarios',
-    'propriedades',
+    'propriedades.apps.PropriedadesConfig',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'notificacoes',
 ]
 
 MIDDLEWARE = [
