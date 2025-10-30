@@ -56,8 +56,12 @@ class AuthService {
           'token': token,
           'user': data['user'],
         };
+      } else if (response.statusCode == 400 || response.statusCode == 401) {
+        // Credenciais inválidas: não lançar erro, deixar o caller tratar como login inválido
+        return null;
       } else {
-        throw response.body;
+        // Outros erros HTTP: lançar para o caller exibir erro genérico
+        throw 'Erro no login (HTTP ${response.statusCode})';
       }
     } catch (e) {
       print('Erro na requisição de login: $e');
