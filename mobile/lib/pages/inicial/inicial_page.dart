@@ -24,6 +24,9 @@ import 'package:mobile/pages/profile/contratos_page.dart';
 import 'package:mobile/pages/login/login_home_page.dart';
 import 'package:mobile/pages/inicial/favorites_page.dart';
 import 'package:mobile/core/services/favorites_service.dart';
+import 'package:mobile/pages/notificacoes/notificacao_page.dart';
+import 'package:mobile/core/services/notification_service.dart';
+import 'package:mobile/pages/notificacoes/notificacao_page.dart';
 
 class InicialPage extends StatefulWidget {
   final String name; // nome completo do usuário
@@ -49,6 +52,7 @@ class _InicialPageState extends State<InicialPage> {
   int _navIndex = 0;
   String? _avatarUrl;
   int? _myUserId;
+  int _notificationCount = 0;
 
   /// lista dinâmica com os imóveis criados pelo usuário logado
   final List<Map<String, dynamic>> _meusAnuncios = [];
@@ -379,6 +383,28 @@ class _InicialPageState extends State<InicialPage> {
     }
   }
 
+  Future<void> _loadNotificationCount() async {
+    final token = await AuthService.getSavedToken();
+    if (token == null) return; // Se não tem token, não faz nada
+
+    final count = await NotificationService.getUnreadCount(token: token);
+    
+    if (mounted) {
+      setState(() {
+        _notificationCount = count;
+      });
+    }
+  }
+  
+  //quando abre a tela atualiza a contagem de notificação
+  Future<void> _abrirNotificacoes() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const TelaNotificacao()),
+    );
+    _loadNotificationCount();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -397,6 +423,8 @@ class _InicialPageState extends State<InicialPage> {
                   avatarBytes: widget.avatarBytes,
                   avatarUrl: _avatarUrl,
                   onAdd: _abrirCriarImovel,
+                  notificationCount: _notificationCount,
+                  onNotificationIconPressed: _abrirNotificacoes,
                 ),
                 const SizedBox(height: 16),
                 _LocationAndProfile(city: widget.city),
@@ -506,8 +534,10 @@ class _Header extends StatelessWidget {
   final Uint8List? avatarBytes; // bytes do avatar (opcional)
   final String? avatarUrl; // optional remote avatar url
   final VoidCallback? onAdd;
+  final int notificationCount;
+  final VoidCallback onNotificationIconPressed; 
 
-  const _Header({required this.name, this.avatarBytes, this.avatarUrl, this.onAdd});
+  const _Header({required this.name, this.avatarBytes, this.avatarUrl, this.onAdd, required this.notificationCount, required this.onNotificationIconPressed});
 
   String _initials(String n) {
     final parts = n.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
@@ -558,7 +588,16 @@ class _Header extends StatelessWidget {
                     tooltip: 'Adicionar imóvel',
                   ),
                 const SizedBox(width: 6),
-                const Icon(Icons.notifications_none_rounded),
+
+                Badge(
+                  label: Text(notificationCount.toString()),
+                  isLabelVisible: notificationCount > 0,
+                  child: IconButton(
+                    icon: const Icon(Icons.notifications_none_rounded),
+                    onPressed: onNotificationIconPressed, 
+                  ),
+                ),
+                               
                 const SizedBox(width: 10),
                 PopupMenuButton<String>(
                   onSelected: (v) async {
