@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:mobile/core/constants.dart';
+import 'package:mobile/core/services/favorites_service.dart';
 import 'package:mobile/core/utils/property_utils.dart';
 import 'package:mobile/pages/imoveis/widgets/header_imo.dart';
 import 'package:mobile/pages/imoveis/widgets/search_imoveis.dart';
@@ -269,6 +270,20 @@ class _ImoveisPageState extends State<ImoveisPage> {
                               rating: rating,
                               distancia: distancia,
                               favorito: imovel['favorito'] == true,
+                              onToggleFavorite: () async {
+                                final id = imovel['id'];
+                                if (id == null) return;
+                                final int pid = id is int
+                                    ? id
+                                    : (id is String ? int.tryParse(id) ?? -1 : -1);
+                                if (pid < 0) return;
+                                final res = await FavoritesService.toggleFavorite(pid, token: widget.token);
+                                if (res != null && mounted) {
+                                  setState(() {
+                                    imovel['favorito'] = res;
+                                  });
+                                }
+                              },
                             ),
                           );
                         },

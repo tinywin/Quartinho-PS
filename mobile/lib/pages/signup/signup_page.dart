@@ -92,6 +92,9 @@ class _SignUpPageState extends State<SignUpPage> {
     setState(() => _loading = true);
 
     // Montei o payload redundante para bater com possíveis campos do backend:
+    // Normaliza CPF para apenas dígitos para atender ao validador do backend
+    final cpfDigits = _cpfCtrl.text.trim().replaceAll(RegExp(r'[^0-9]'), '');
+
     final payload = <String, dynamic>{
       // você usava 'nome_completo'; adiciono 'full_name' e 'username' também
       'nome_completo': _nameCtrl.text.trim(),
@@ -100,7 +103,7 @@ class _SignUpPageState extends State<SignUpPage> {
 
       'email': _emailCtrl.text.trim(),
       'password': _passwordCtrl.text,
-      'cpf': _cpfCtrl.text.trim(),
+      'cpf': cpfDigits,
       'data_nascimento': _birthDate != null
           ? '${_birthDate!.year.toString().padLeft(4, '0')}-${_birthDate!.month.toString().padLeft(2, '0')}-${_birthDate!.day.toString().padLeft(2, '0')}'
           : null,

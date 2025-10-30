@@ -7,6 +7,9 @@ import 'package:mobile/pages/login/widgets/buttom_gmail.dart';
 import 'package:mobile/pages/login/widgets/login_image_home.dart';
 import 'package:mobile/pages/login/widgets/buttom_facebook.dart';
 import 'package:mobile/pages/signup/signup_page.dart'; //  importa sua tela de cadastro
+import 'package:mobile/core/services/auth_service.dart';
+import 'package:mobile/pages/choose_role/choose_role_page.dart';
+import 'package:mobile/pages/inicial/inicial_page.dart';
 
 class LoginHomePage extends StatelessWidget {
   const LoginHomePage({super.key});
@@ -70,9 +73,91 @@ class LoginHomePage extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(child: ButtomGmail(onPressed: () {})),
+                  Container(child: ButtomGmail(onPressed: () async {
+                    try {
+                      final result = await AuthService.loginWithGoogleMobile();
+                      if (result != null && result['token'] != null) {
+                        final user = result['user'] as Map<String, dynamic>?;
+                        final name = user != null ? (user['username'] ?? user['full_name'] ?? '') : '';
+                        final email = user != null ? (user['email'] ?? '') : '';
+                        if (context.mounted) {
+                          final done = email.isNotEmpty ? await AuthService.isOnboardingCompleted(email) : false;
+                          if (done) {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => InicialPage(
+                                  name: name.isNotEmpty ? name : (email.isNotEmpty ? email.split('@').first : 'Usuário'),
+                                  city: '',
+                                ),
+                              ),
+                            );
+                          } else {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ChooseRolePage(
+                                  name: name.isNotEmpty ? name : (email.isNotEmpty ? email.split('@').first : 'Usuário'),
+                                  email: email,
+                                ),
+                              ),
+                            );
+                          }
+                        }
+                      } else {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Falha no login Google')));
+                        }
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
+                      }
+                    }
+                  })),
                   SizedBox(width: 20),
-                  Container(child: ButtomFacebook(onPressed: () {})),
+                  Container(child: ButtomFacebook(onPressed: () async {
+                    try {
+                      final result = await AuthService.loginWithFacebookMobile();
+                      if (result != null && result['token'] != null) {
+                        final user = result['user'] as Map<String, dynamic>?;
+                        final name = user != null ? (user['username'] ?? user['full_name'] ?? '') : '';
+                        final email = user != null ? (user['email'] ?? '') : '';
+                        if (context.mounted) {
+                          final done = email.isNotEmpty ? await AuthService.isOnboardingCompleted(email) : false;
+                          if (done) {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => InicialPage(
+                                  name: name.isNotEmpty ? name : (email.isNotEmpty ? email.split('@').first : 'Usuário'),
+                                  city: '',
+                                ),
+                              ),
+                            );
+                          } else {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ChooseRolePage(
+                                  name: name.isNotEmpty ? name : (email.isNotEmpty ? email.split('@').first : 'Usuário'),
+                                  email: email,
+                                ),
+                              ),
+                            );
+                          }
+                        }
+                      } else {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Falha no login Facebook')));
+                        }
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
+                      }
+                    }
+                  })),
                 ],
               ),
 

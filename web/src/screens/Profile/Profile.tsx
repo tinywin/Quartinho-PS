@@ -16,6 +16,7 @@ const Profile = (): JSX.Element => {
   const [email, setEmail] = useState('');
   const [cpf, setCpf] = useState('');
   const [dataNascimento, setDataNascimento] = useState('');
+  const [telefone, setTelefone] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
@@ -29,6 +30,7 @@ const Profile = (): JSX.Element => {
         setEmail(d.email ?? '');
         setCpf(d.cpf ?? '');
         setDataNascimento(d.data_nascimento ?? '');
+        setTelefone(d.telefone ?? '');
         setAvatarPreview(d.avatar ?? null);
       } catch (err) {
         // if not authenticated or error, fallback to localStorage
@@ -58,6 +60,7 @@ const Profile = (): JSX.Element => {
       if (email) form.append('email', email);
       if (cpf) form.append('cpf', cpf);
       if (dataNascimento) form.append('data_nascimento', dataNascimento);
+      if (telefone) form.append('telefone', telefone);
       if (avatarFile) form.append('avatar', avatarFile);
 
       const res = await axios.patch(`${API_BASE_URL}/usuarios/me/`, form, {
@@ -70,7 +73,7 @@ const Profile = (): JSX.Element => {
       const d = res.data || {};
       // persist to localStorage for quick access
       try {
-        saveUserData({ id: d.id, email: d.email, full_name: d.username, avatar: d.avatar });
+        saveUserData({ id: d.id, email: d.email, full_name: d.username, avatar: d.avatar, telefone: d.telefone });
       } catch (e) {
         // ignore
       }
@@ -128,6 +131,10 @@ const Profile = (): JSX.Element => {
         <div>
           <label className="block text-sm text-gray-700">Data de nascimento</label>
           <input type="date" value={dataNascimento} onChange={(e) => setDataNascimento(e.target.value)} className="w-full px-3 py-2 border rounded" />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-700">Telefone</label>
+          <input type="tel" value={telefone} onChange={(e) => setTelefone(e.target.value)} className="w-full px-3 py-2 border rounded" placeholder="(11) 99999-9999" />
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'widgets/back_pill_button.dart';
 import 'widgets/skip_pill.dart';
@@ -122,7 +123,10 @@ void _goNext() {
                     }
 
                     // Se quiser salvar endereço/cidade, você pode passar adiante também.
-                    _goNext();
+                    // Persistir região/cidade selecionada na primeira vez
+                    SharedPreferences.getInstance().then((prefs) {
+                      prefs.setString('user_region', _addressCtrl.text.trim());
+                    }).whenComplete(_goNext);
                   },
                   child: Text(
                     "Próximo",
