@@ -39,7 +39,7 @@ Escolha baseado no que você está desenvolvendo:
 ### 🌐 URLs Disponíveis
 
 - **Local**: `http://127.0.0.1:8000`
-- **Rede (celular físico)**: `http://SEU_IP:8000` (ex: `192.168.15.101:8000`)
+- **Rede (celular físico)**: `http://SEU_IP:8000` (ex: `192.168.13.103:8000`)
 
 ### 💡 Dicas
 
