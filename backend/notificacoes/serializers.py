@@ -12,3 +12,9 @@ class NotificacaoSerializer(serializers.ModelSerializer):
             'lida', 
             'data_criacao'
         ]
+
+
+class DeviceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = __import__('notificacoes.models', fromlist=['Device']).Device
+        fields = ['id', 'usuario', 'registration_id', 'platform', 'criado_em']

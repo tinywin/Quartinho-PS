@@ -23,6 +23,9 @@ urlpatterns = [
 
     # Endpoints do app notificações
     path('notificacoes/', include('notificacoes.urls')),
+
+    # Endpoints do app mensagens
+    path('mensagens/', include('mensagens.urls')),
 ]
 
 # Configuração para servir arquivos de mídia durante o desenvolvimento

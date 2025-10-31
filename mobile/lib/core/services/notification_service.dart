@@ -87,4 +87,51 @@ static Future<bool> markAllAsRead({ required String token }) async {
     }
   }
 
+  static Future<bool> deleteNotification({
+    required String token,
+    required int notificationId,
+  }) async {
+    try {
+      final url = Uri.parse('$backendHost/notificacoes/$notificationId/');
+      
+      final resp = await http.delete(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+      
+      // 204 No Content é a resposta de sucesso para DELETE
+      return resp.statusCode == 204;
+
+    } catch (e) {
+      // ignore: avoid_print
+      print('Erro em NotificationService.deleteNotification: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> deleteAllNotifications({ required String token }) async {
+    try {
+      final url = Uri.parse('$backendHost/notificacoes/excluir_todas/');
+      
+      final resp = await http.delete(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+      
+      // 200 OK é a resposta de sucesso
+      return resp.statusCode == 200;
+
+    } catch (e) {
+      // ignore: avoid_print
+      print('Erro em NotificationService.deleteAllNotifications: $e');
+      return false;
+    }
+  }
+
 }
