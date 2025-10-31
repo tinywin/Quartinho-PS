@@ -1,9 +1,5 @@
-Perfeito 🔥 — aqui está o arquivo **já convertido para Markdown (`README.md`)**, formatado, bonito e pronto pra colar direto no VS Code (com preview automático).
-
----
-
 # 📱 Quartinho-PS Mobile
-
+Bem-vindo,
 Aplicativo **Flutter** do **Quartinho-PS**, que consome a API Django e usa **WebSockets via Daphne** para chat em tempo real.
 
 Agora o backend pode ser configurado dinamicamente com:
