@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/services/messages_service.dart';
 import '../../core/services/auth_service.dart';
+import '../../core/constants.dart';
+import '../../services/chat_service.dart';
 
 class ChatPage extends StatefulWidget {
   final int ownerId;
@@ -15,7 +18,9 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   final TextEditingController _ctrl = TextEditingController();
   int? _myUserId;
-  late final Stream<List<Map<String, dynamic>>> _stream;
+  final List<Map<String, dynamic>> _messages = [];
+  Timer? _pollTimer;
+  ChatService? _chatService;
 
   @override
   void initState() {
@@ -25,15 +30,45 @@ class _ChatPageState extends State<ChatPage> {
       if (t != null) {
         final me = await AuthService.me(token: t);
         if (me != null) setState(() => _myUserId = me['id'] is int ? me['id'] as int : int.tryParse(me['id']?.toString() ?? ''));
+        // initial load
+        final initial = await MessagesService.loadMessagesWithUser(widget.ownerId, token: t);
+        setState(() {
+          _messages
+            ..clear()
+            ..addAll(initial);
+        });
+        // start polling as a safety net (in case WS disconnects)
+        _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) async {
+          final list = await MessagesService.loadMessagesWithUser(widget.ownerId, token: t);
+          if (mounted) setState(() { _messages
+            ..clear()
+            ..addAll(list);
+          });
+        });
+        // connect websocket for realtime
+        _chatService = ChatService(baseUrl: backendHost);
+        _chatService!.connectWebSocket(backendHost, t);
+        _chatService!.messages.listen((evt) {
+          final m = evt['message'];
+          if (m is Map) {
+            final sender = m['sender'] as Map?;
+            final recipient = m['recipient'] as Map?;
+            final sid = sender != null ? int.tryParse(sender['id'].toString()) : null;
+            final rid = recipient != null ? int.tryParse(recipient['id'].toString()) : null;
+            if (sid == widget.ownerId || rid == widget.ownerId) {
+              if (mounted) setState(() => _messages.add(Map<String, dynamic>.from(m)));
+            }
+          }
+        });
       }
     });
-
-    _stream = MessagesService.watchWithUser(widget.ownerId);
   }
 
   @override
   void dispose() {
     _ctrl.dispose();
+    _pollTimer?.cancel();
+    _chatService?.dispose();
     super.dispose();
   }
 
@@ -43,6 +78,12 @@ class _ChatPageState extends State<ChatPage> {
     final token = await AuthService.getSavedToken();
     if (token == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Faça login para enviar mensagens')));
+      return;
+    }
+    // try websocket first for instant delivery; fallback to HTTP
+    if (_chatService != null) {
+      _chatService!.sendMessage(widget.ownerId, text);
+      _ctrl.clear();
       return;
     }
     final res = await MessagesService.sendMessageTo(widget.ownerId, text, token: token);
@@ -70,14 +111,12 @@ class _ChatPageState extends State<ChatPage> {
       body: Column(
         children: [
           Expanded(
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _stream,
-              builder: (ctx, snap) {
-                final list = snap.data ?? [];
-                if (list.isEmpty) {
+            child: Builder(builder: (ctx) {
+              final list = _messages;
+              if (list.isEmpty) {
                   return Center(child: Text('Nenhuma mensagem ainda. Seja o primeiro a enviar uma pergunta.', style: GoogleFonts.poppins()));
-                }
-                return ListView.builder(
+              }
+              return ListView.builder(
                   padding: const EdgeInsets.all(12),
                   itemCount: list.length,
                   itemBuilder: (_, i) {
@@ -111,9 +150,8 @@ class _ChatPageState extends State<ChatPage> {
                       ),
                     );
                   },
-                );
-              },
-            ),
+              );
+            }),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

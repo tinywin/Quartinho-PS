@@ -25,7 +25,7 @@ import 'package:mobile/pages/profile/contratos_page.dart';
 import 'package:mobile/pages/login/login_home_page.dart';
 import 'package:mobile/pages/inicial/favorites_page.dart';
 import 'package:mobile/core/services/favorites_service.dart';
-import 'package:mobile/pages/notificacoes/notificacao_page.dart';
+import 'package:mobile/pages/notificacoes/notificacoes_mensagens_page.dart';
 import 'package:mobile/core/services/notification_service.dart';
 // import duplicado removido
 
@@ -420,7 +420,7 @@ class _InicialPageState extends State<InicialPage> {
   Future<void> _abrirNotificacoes() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const TelaNotificacao()),
+      MaterialPageRoute(builder: (_) => const NotificacoesMensagensPage()),
     );
     _loadNotificationCount();
   }

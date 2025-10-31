@@ -2,8 +2,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:mobile/core/constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
+// Social login SDKs - temporariamente não usados
+// import 'package:google_sign_in/google_sign_in.dart';
+// import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 
 class AuthService {
   // Use a runtime getter so the `backendHost` selection logic (web/emulator/device)
@@ -70,9 +71,12 @@ class AuthService {
   }
 
   // --- Social Login (Mobile) ---
+  // TODO: Corrigir API do google_sign_in e flutter_facebook_auth
+  // Google Sign In v7+ mudou o construtor e métodos
   static Future<Map<String, dynamic>?> loginWithGoogleMobile() async {
-    try {
-      final google = GoogleSignIn(clientId: googleWebClientId);
+    throw UnimplementedError('Login Google temporariamente desabilitado - aguardando correção de API');
+    /* try {
+      final google = GoogleSignIn.standard();
       final account = await google.signIn();
       if (account == null) return null; // usuário cancelou
       final auth = await account.authentication;
@@ -101,16 +105,18 @@ class AuthService {
     } catch (e) {
       print('Erro login Google mobile: $e');
       rethrow;
-    }
+    } */
   }
 
   static Future<Map<String, dynamic>?> loginWithFacebookMobile() async {
-    try {
+    throw UnimplementedError('Login Facebook temporariamente desabilitado - aguardando correção de API');
+    /* try {
       final result = await FacebookAuth.instance.login(permissions: ['email', 'public_profile']);
       if (result.status != LoginStatus.success) {
         throw result.message ?? 'Falha no login do Facebook';
       }
-      final accessToken = result.accessToken?.token;
+      // AccessToken mudou de .token para .tokenString em versões recentes
+      final accessToken = result.accessToken?.tokenString ?? result.accessToken?.token;
       if (accessToken == null) throw 'Facebook access_token indisponível.';
       final url = Uri.parse('$baseUrl/usuarios/social/facebook/');
       final resp = await http.post(
@@ -133,7 +139,7 @@ class AuthService {
     } catch (e) {
       print('Erro login Facebook mobile: $e');
       rethrow;
-    }
+    } */
   }
 
   static Future<Map<String, dynamic>?> me({required String token}) async {

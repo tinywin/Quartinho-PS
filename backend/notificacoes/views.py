@@ -6,10 +6,14 @@ from .models import Notificacao
 from .serializers import NotificacaoSerializer
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
+from .serializers import DeviceSerializer
+from .models import Device
+from .utils import send_fcm_to_user
 
-class NotificacaoViewSet(viewsets.ReadOnlyModelViewSet):
+class NotificacaoViewSet(viewsets.ModelViewSet):
     """
-    Este endpoint lista e recupera as notificações
+    Este endpoint lista, recupera e deleta as notificações
     APENAS para o usuário autenticado.
     """
     serializer_class = NotificacaoSerializer
@@ -47,4 +51,35 @@ class NotificacaoViewSet(viewsets.ReadOnlyModelViewSet):
         queryset.filter(lida=False).update(lida=True)
         
         # Retorna uma resposta de sucesso sem conteúdo
-        return Response(status=status.HTTP_204_NO_CONTENT)    
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    
+    @action(detail=False, methods=['delete'])
+    def excluir_todas(self, request):
+        """
+        Exclui todas as notificações do usuário logado.
+        """
+        # Pega o queryset (já filtrado para o usuário logado)
+        queryset = self.get_queryset()
+        
+        # Deleta todas as notificações do usuário
+        count = queryset.count()
+        queryset.delete()
+        
+        # Retorna uma resposta de sucesso
+        return Response({'deleted': count}, status=status.HTTP_200_OK)    
+
+
+class RegisterDeviceView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        token = request.data.get('token') or request.data.get('registration_id')
+        platform = request.data.get('platform')
+        if not token:
+            return Response({'detail': 'token required'}, status=status.HTTP_400_BAD_REQUEST)
+        device, created = Device.objects.get_or_create(usuario=request.user, registration_id=token, defaults={'platform': platform})
+        if not created and platform and device.platform != platform:
+            device.platform = platform
+            device.save()
+        serializer = DeviceSerializer(device)
+        return Response(serializer.data)

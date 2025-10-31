@@ -25,3 +25,17 @@ class Notificacao(models.Model):
     class Meta:
         ordering = ['-data_criacao']
         verbose_name_plural = "Notificações"
+
+
+class Device(models.Model):
+    """Device registration to receive push notifications via FCM."""
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='devices')
+    registration_id = models.CharField(max_length=512)
+    platform = models.CharField(max_length=32, null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('usuario', 'registration_id')
+
+    def __str__(self):
+        return f'Device {self.usuario_id} - {self.platform}'

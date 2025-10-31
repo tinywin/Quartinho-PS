@@ -7,7 +7,8 @@ import 'comentarios_section.dart';
 import 'map_preview.dart';
 import '../../core/services/favorites_service.dart';
 import '../../core/services/auth_service.dart';
-import 'contrato_aluguel_page.dart';
+// import 'contrato_aluguel_page.dart';
+import 'chat_page.dart';
 
 class ImovelDetalhePage extends StatelessWidget {
   final Map imovel;
@@ -123,23 +124,48 @@ class ImovelDetalhePage extends StatelessWidget {
                     Text('Proprietário: ${imovel['dono'] ?? imovel['proprietario']}'),
                   ],
 
-                  // Botão Alugar abaixo das informações do dono (centralizado)
-                  const SizedBox(height: 12),
-                  Center(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6E56CF), // paleta da página
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  // Ações principais conforme Figma: "Eu quero!" e "Entrar em contato"
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFF6E56CF)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          onPressed: () {
+                            final owner = (imovel['proprietario'] ?? imovel['dono']) as Map?;
+                            final ownerId = owner != null ? (owner['id'] is int ? owner['id'] as int : int.tryParse(owner['id']?.toString() ?? '')) : null;
+                            final ownerName = owner != null ? (owner['nome'] ?? owner['nome_completo'] ?? owner['username'] ?? 'Proprietário').toString() : 'Proprietário';
+                            if (ownerId != null) {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(ownerId: ownerId, ownerName: ownerName)));
+                            }
+                          },
+                          child: Text('Eu quero!', style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF6E56CF))),
+                        ),
                       ),
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => ContratoAluguelPage(imovel: imovel)),
-                        );
-                      },
-                      child: Text('Alugar', style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                    ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6E56CF),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          onPressed: () {
+                            final owner = (imovel['proprietario'] ?? imovel['dono']) as Map?;
+                            final ownerId = owner != null ? (owner['id'] is int ? owner['id'] as int : int.tryParse(owner['id']?.toString() ?? '')) : null;
+                            final ownerName = owner != null ? (owner['nome'] ?? owner['nome_completo'] ?? owner['username'] ?? 'Proprietário').toString() : 'Proprietário';
+                            if (ownerId != null) {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(ownerId: ownerId, ownerName: ownerName)));
+                            }
+                          },
+                          child: Text('Entrar em contato', style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                        ),
+                      ),
+                    ],
                   ),
 
                   const SizedBox(height: 24),

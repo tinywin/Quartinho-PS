@@ -1,157 +1,342 @@
-# COMO RODAR – Quartinho-PS
+# 🏠 COMO RODAR – Quartinho-PS
 
-Este guia descreve como iniciar o backend (Django), o web (Vite/React) e o mobile (Flutter), além de notas de configuração de host e Google Maps.
-
-## Pré-requisitos
-- Windows com PowerShell
-- Python 3.10+ e `pip`
-- Node.js 18+ e `npm`
-- Flutter SDK instalado (testado com Flutter 3.35.4)
-- Opcional (para Flutter Desktop Windows): Visual Studio (Build Tools) com workload “Desktop development with C++”
+Guia rápido e completo para rodar o projeto: **Backend** (Django), **Web** (React) e **Mobile** (Flutter).
 
 ---
-## 1) Backend (Django)
-1. `cd backend`
-2. Crie e ative o ambiente:
-   - `python -m venv .venv`
-   - `.venv\Scripts\Activate.ps1`
-3. Instale dependências:
-   - `pip install -r requirements.txt`
-4. Migrações e servidor:
-   - `python manage.py migrate`
-   - `python manage.py runserver`
-5. Backend disponível em: `http://127.0.0.1:8000/`
 
-Observações:
-- Certifique-se de que `ALLOWED_HOSTS` e CORS estão configurados para aceitar `localhost`/`127.0.0.1` (especialmente para desenvolvimento web/mobile).
+## 📋 Pré-requisitos
+
+- **Windows** com PowerShell
+- **Python 3.10+** com pip
+- **Node.js 18+** com npm  
+- **Flutter SDK** 3.35.4+
+- **Visual Studio Build Tools** (opcional, só para Flutter Desktop)
 
 ---
-## 2) Web (Vite + React)
-1. `cd web`
-2. Instale e rode:
-   - `npm install`
-   - `npm run dev`
-3. Acesse: `http://localhost:5174/` (se ocupado, Vite escolherá outro porto, ex.: 5175)
 
-Configuração de API:
-- A base de API é centralizada em `web/src/utils/apiConfig.ts` via `API_BASE_URL`.
-- Use `http://127.0.0.1:8000` para evitar problemas de IPv6/localhost no Windows.
-- Telas ajustadas para usar a base unificada:
-  - `EmailLogin.tsx`: usa `${API_BASE_URL}/usuarios/login/`
-  - `Register.tsx`: usa `${API_BASE_URL}/usuarios/usercreate/` e `${API_BASE_URL}/usuarios/check-email/`
+## 🔧 Backend (Django)
 
----
-## 3) Mobile (Flutter)
-Preferência rápida para testar Web:
-- `cd mobile`
-- `flutter pub get`
-- `flutter run -d edge` (abre no Microsoft Edge). Se quiser Chrome, use `-d chrome` quando disponível.
+### 📦 Setup Inicial (faça uma vez)
 
-Para executar em Desktop (Windows):
-- Instale Visual Studio com “Desktop development with C++”.
-- Rode: `flutter run -d windows`.
-- Se aparecer “Unable to find suitable Visual Studio toolchain”, instale/atualize os componentes C++.
-
-Para Android (emulador):
-- Inicie um AVD pelo Android Studio.
-- Use: `flutter run -d emulator-5554` (ou o id do seu emulador).
-- Como o backend está no host, a API deve usar `10.0.2.2` dentro do emulador.
-
-Seleção de Host da API no Flutter:
-- Arquivo: `mobile/lib/core/constants.dart`
-- Já configurado:
-  - Web/Windows/Linux/macOS: `http://127.0.0.1:8000`
-  - Android emulador: `http://10.0.2.2:8000`
-  - iOS/Android físico: use seu IP LAN (ex.: `http://192.168.x.x:8000`)
-- Para forçar “modo emulador Android”, rode com `--dart-define=IS_EMULATOR=true`, por exemplo:
-  - `flutter run -d emulator-5554 --dart-define=IS_EMULATOR=true`
-
-Serviços que usam a base:
-- `auth_service.dart`, `favorites_service.dart`, `messages_service.dart` usam `backendHost` para montar as URLs.
-
----
-## 4) Google Maps – O que fazer para ficar funcional
-
-### 4.1 Web (React)
-- Crie um projeto no Google Cloud, habilite “Maps JavaScript API” e configure billing.
-- Gere uma API Key restrita ao seu domínio/localhost.
-- Instale o wrapper React:
-  - `npm i @react-google-maps/api`
-- Adicione a key no `.env` do `web`:
-  - `VITE_GOOGLE_MAPS_API_KEY=YOUR_KEY_HERE`
-- Exemplo simples de uso:
-  ```tsx
-  import { useMemo } from 'react';
-  import { GoogleMap, Marker, useJsApiLoader } from '@react-google-maps/api';
-
-  const center = { lat: -23.5505, lng: -46.6333 };
-
-  export function MapWidget() {
-    const { isLoaded } = useJsApiLoader({ id: 'gmaps', googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY });
-    const containerStyle = useMemo(() => ({ width: '100%', height: 350 }), []);
-    if (!isLoaded) return null;
-    return (
-      <GoogleMap mapContainerStyle={containerStyle} center={center} zoom={12}>
-        <Marker position={center} />
-      </GoogleMap>
-    );
-  }
-  ```
-
-### 4.2 Mobile (Flutter)
-- No `pubspec.yaml`:
-  - `google_maps_flutter: ^2.7.0`
-  - Para suporte Web, também: `google_maps_flutter_web: ^0.5.6`
-- Rode `flutter pub get`.
-
-Android:
-- Em `android/app/src/main/AndroidManifest.xml`, dentro de `<application>`:
-  ```xml
-  <meta-data
-      android:name="com.google.android.geo.API_KEY"
-      android:value="YOUR_ANDROID_KEY" />
-  ```
-- Garanta que o `minSdkVersion` >= 21.
-
-iOS:
-- Em `ios/Runner/AppDelegate.swift` (Swift) ou `AppDelegate.m` (Obj-C), inicialize:
-  ```swift
-  import GoogleMaps
-  GMSServices.provideAPIKey("YOUR_IOS_KEY")
-  ```
-- Adicione permissões em `Info.plist` conforme necessário.
-
-Flutter Web:
-- Adicione o script do Maps no `mobile/web/index.html` (projeto Flutter):
-  ```html
-  <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_WEB_KEY"></script>
-  ```
-- Inclua `google_maps_flutter_web` no `pubspec.yaml`.
-
-Uso básico em Flutter:
-```dart
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-
-class SimpleMap extends StatelessWidget {
-  const SimpleMap({super.key});
-  @override
-  Widget build(BuildContext context) {
-    const pos = LatLng(-23.5505, -46.6333);
-    return GoogleMap(
-      initialCameraPosition: const CameraPosition(target: pos, zoom: 12),
-      markers: { const Marker(markerId: MarkerId('A'), position: pos) },
-      myLocationEnabled: true,
-    );
-  }
-}
+```powershell
+cd backend
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py createsuperuser  # opcional
 ```
 
-Notas de segurança:
-- Restrinja suas Keys no Google Cloud (domínios, SHA-1 do app, pacotes). Nunca exponha keys de produção em repositórios públicos.
+### 🚀 Rodando o Servidor
+
+Escolha baseado no que você está desenvolvendo:
+
+| Desenvolvimento | Comando | Quando usar |
+|----------------|---------|-------------|
+| **Web (React)** | `python manage.py runserver 0.0.0.0:8000` | API REST simples |
+| **Mobile (Flutter)** | `daphne -b 0.0.0.0 -p 8000 backend.asgi:application` | Precisa de WebSocket (chat) |
+
+### 🌐 URLs Disponíveis
+
+- **Local**: `http://127.0.0.1:8000`
+- **Rede (celular físico)**: `http://SEU_IP:8000` (ex: `192.168.15.101:8000`)
+
+### 💡 Dicas
+
+- Use `ALLOWED_HOSTS = ['*']` para desenvolvimento
+- Configure `CORS_ALLOW_ALL_ORIGINS = True`
+- Adicione hosts em `CSRF_TRUSTED_ORIGINS`
 
 ---
-## 5) Dicas de troubleshooting
-- Se o web não conecta ao backend, verifique `API_BASE_URL` e se o backend está em `127.0.0.1:8000`.
-- No mobile, confirme se o `backendHost` está correto para sua plataforma (emulador vs. físico vs. desktop).
-- Erro de Flutter Desktop (Windows) sobre Visual Studio: instale o workload C++ Desktop e reinicie.
-- CORS/CSRF no Django: habilite para `http://localhost:5174` e `http://127.0.0.1:8000` em desenvolvimento.
+
+## 🌐 Web (React + Vite)
+
+### 📦 Setup e Execução
+
+```powershell
+cd web
+npm install
+npm run dev
+```
+
+### 🌐 Acesso
+
+- Geralmente: `http://localhost:5173`
+- Vite escolhe porta automática se 5173 estiver ocupada
+
+### ⚙️ Configuração da API
+
+- Arquivo: `web/src/utils/apiConfig.ts`
+- Base: `API_BASE_URL = "http://127.0.0.1:8000"`
+- Use `127.0.0.1` (não `localhost`) para evitar problemas de IPv6 no Windows
+
+---
+
+## 📱 Mobile (Flutter)
+
+### 📦 Setup Inicial
+
+```powershell
+cd mobile
+flutter pub get
+```
+
+### 🚀 Executar
+
+| Plataforma | Comando |
+|-----------|---------|
+| **Web (Edge)** | `flutter run -d edge` |
+| **Web (Chrome)** | `flutter run -d chrome` |
+| **Windows Desktop** | `flutter run -d windows` |
+| **Android Emulador** | `flutter run -d emulator-5554` |
+| **Android Físico** | `flutter run` (com USB conectado) |
+
+### 🌐 Configuração de Host
+
+Arquivo: `mobile/lib/core/constants.dart`
+
+| Plataforma | URL Backend |
+|-----------|-------------|
+| Web/Desktop | `http://127.0.0.1:8000` |
+| Android Emulador | `http://10.0.2.2:8000` |
+| Android/iOS Físico | `http://SEU_IP_LAN:8000` |
+
+**Modo Emulador**:
+```powershell
+flutter run -d emulator-5554 --dart-define=IS_EMULATOR=true
+```
+
+### 💬 WebSocket (Chat)
+
+- Converte automaticamente: `http://` → `ws://` e `https://` → `wss://`
+- Endpoint: `/ws/chat/?token=JWT_TOKEN`
+- **Importante**: Backend deve rodar com Daphne, não `runserver`
+
+### ⚡ Comandos durante execução (Hot Reload)
+
+Quando o Flutter estiver rodando (`flutter run`), você pode usar:
+
+- **`r`** → Hot Reload (rápido) - Atualiza apenas o código modificado
+- **`R`** → Hot Restart (completo) - Reinicia o app do zero, mantém o estado
+- **`q`** → Quit - Encerra a execução
+
+💡 Use `r` para mudanças de UI e `R` quando adicionar novos arquivos ou mudar dependências.
+
+---
+
+## 🗺️ Google Maps (Opcional)
+
+### Web (React)
+
+```bash
+npm i @react-google-maps/api
+```
+
+Arquivo `.env`:
+```
+VITE_GOOGLE_MAPS_API_KEY=SUA_KEY_AQUI
+```
+
+### Mobile (Flutter)
+
+**pubspec.yaml**:
+```yaml
+dependencies:
+  google_maps_flutter: ^2.7.0
+```
+
+**Android** (`AndroidManifest.xml`):
+```xml
+<meta-data
+    android:name="com.google.android.geo.API_KEY"
+    android:value="SUA_KEY_ANDROID" />
+```
+
+**iOS** (`AppDelegate.swift`):
+```swift
+import GoogleMaps
+GMSServices.provideAPIKey("SUA_KEY_IOS")
+```
+
+---
+
+## 🐛 Troubleshooting
+
+### Backend não conecta
+- ✅ Verifique se está rodando em `127.0.0.1:8000`
+- ✅ Confirme CORS habilitado
+- ✅ Veja console para erros
+
+### WebSocket falha ("not upgraded")
+- ✅ Use `daphne` em vez de `runserver`
+- ✅ URL deve ser `ws://` (não `http://`)
+- ✅ Token JWT válido no query string
+
+### Flutter não encontra backend
+- ✅ Emulador Android: use `10.0.2.2:8000`
+- ✅ Celular físico: use IP da LAN (mesmo WiFi)
+- ✅ Verifique `mobile/lib/core/constants.dart`
+
+### Chat não mostra nome
+- ✅ Rode migrations: `python manage.py migrate`
+- ✅ Verifique se `UsuarioSerializer` retorna campo `nome`
+- ✅ Reinicie Daphne após mudanças no código
+
+---
+
+## ⚡ Comandos Úteis
+
+### Reset do Banco de Dados
+
+```powershell
+cd backend
+Remove-Item db.sqlite3
+python manage.py migrate
+python manage.py createsuperuser
+```
+
+### Daphne com Auto-reload
+
+```powershell
+pip install watchdog
+watchmedo auto-restart --directory=./ --pattern=*.py --recursive -- daphne -b 0.0.0.0 -p 8000 backend.asgi:application
+```
+
+### Limpar Cache Flutter
+
+```powershell
+cd mobile
+flutter clean
+flutter pub get
+```
+
+### Limpar Cache Web
+
+```powershell
+cd web
+Remove-Item node_modules -Recurse -Force
+Remove-Item package-lock.json
+npm install
+```
+
+### Testar WebSocket Manualmente
+
+```powershell
+npm install -g wscat
+wscat -c "ws://127.0.0.1:8000/ws/chat/?token=SEU_TOKEN"
+```
+
+Enviar mensagem:
+```json
+{"type":"message","to":2,"text":"Olá!"}
+```
+
+### Hot Reload Flutter (durante `flutter run`)
+
+- `r` → Hot reload (rápido)
+- `R` → Hot restart (completo)
+- `q` → Quit
+
+### Django Shell - Ver Conversas
+
+```powershell
+python manage.py shell
+```
+
+```python
+from mensagens.models import Conversation, Message
+
+# Listar todas as conversas
+for c in Conversation.objects.all():
+    print(f"ID: {c.id}, Participantes: {[u.email for u in c.participants.all()]}")
+
+# Ver mensagens de uma conversa
+conv = Conversation.objects.first()
+for m in conv.messages.all():
+    print(f"{m.sender.username}: {m.text}")
+```
+
+---
+
+## 🔒 Segurança
+
+### Google Maps Keys
+- ⚠️ Restrinja keys no Google Cloud Console
+- ⚠️ Use diferentes keys para dev/prod
+- ⚠️ Nunca commite keys em repositórios públicos
+
+### Django Settings (Produção)
+- ⚠️ `DEBUG = False`
+- ⚠️ `ALLOWED_HOSTS` específicos
+- ⚠️ `SECRET_KEY` em variável de ambiente
+- ⚠️ CORS restrito a domínios específicos
+
+---
+
+## 📚 Estrutura do Projeto
+
+```
+Quartinho-PS/
+├── backend/          # Django + DRF + Channels
+│   ├── manage.py
+│   ├── backend/      # Settings, URLs, ASGI
+│   ├── usuarios/     # Auth, usuários
+│   ├── propriedades/ # Imóveis
+│   ├── mensagens/    # Chat, WebSocket
+│   └── notificacoes/ # Push notifications
+├── web/              # React + Vite + TypeScript
+│   ├── src/
+│   └── package.json
+└── mobile/           # Flutter (Android, iOS, Web, Desktop)
+    ├── lib/
+    ├── android/
+    ├── ios/
+    └── pubspec.yaml
+```
+
+---
+
+## 🎯 Quick Start (TL;DR)
+
+### Primeira vez
+
+```powershell
+# Backend
+cd backend
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python manage.py migrate
+daphne -b 0.0.0.0 -p 8000 backend.asgi:application
+
+# Web (nova janela)
+cd web
+npm install
+npm run dev
+
+# Mobile (nova janela)
+cd mobile
+flutter pub get
+flutter run -d edge
+```
+
+### Dias seguintes
+
+```powershell
+# Backend
+cd backend
+.venv\Scripts\Activate.ps1
+daphne -b 0.0.0.0 -p 8000 backend.asgi:application
+
+# Web
+cd web
+npm run dev
+
+# Mobile
+cd mobile
+flutter run
+```
+
+---
+
+🎉 **Pronto!** Agora é só desenvolver! Se tiver dúvidas, veja a seção de Troubleshooting acima.
