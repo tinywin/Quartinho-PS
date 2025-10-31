@@ -34,7 +34,7 @@ No PowerShell (Windows):
 ipconfig
 ```
 
-Procure o campo:
+Procure o campo (exemplo):
 
 ```
 Endereço IPv4 . . . . . . . . . . . : 192.168.xx.xxx
