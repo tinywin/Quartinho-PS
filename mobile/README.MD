@@ -49,7 +49,7 @@ Use `--dart-define=BACKEND_HOST` para informar o IP/porta.
 | Ambiente                         | Comando                                                                        |
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | **Android Emulador**             | `flutter run -d emulator-5554 --dart-define=BACKEND_HOST=http://10.0.2.2:8000` |
-| **Celular Físico (mesmo Wi-Fi)** | `flutter run --dart-define=BACKEND_HOST=http://192.168.15.101:8000`            |
+| **Celular Físico (mesmo Wi-Fi)** | `flutter run --dart-define=BACKEND_HOST=http://192.168.xx.xxx:8000`            |
 | **Web (Chrome)**                 | `flutter run -d chrome --dart-define=BACKEND_HOST=http://127.0.0.1:8000`       |
 
 ---
@@ -121,10 +121,10 @@ Se ocorrer erro `"Connection reset by peer"`:
 * Teste o backend direto no navegador do celular:
 
   ```
-  http://192.168.15.101:8000/api/
+  http://192.168.xx.xxx:8000/api/
   ```
 * **Emulador Android:** use `http://10.0.2.2:8000`
-* **Celular físico:** use o IP LAN (`192.168.15.101`)
+* **Celular físico:** use o IP LAN (`192.168.xx.xxx`)
 * No Django `settings.py`, mantenha:
 
   ```python
@@ -156,7 +156,7 @@ daphne -b 0.0.0.0 -p 8000 backend.asgi:application
 # Mobile
 cd mobile
 flutter pub get
-flutter run --dart-define=BACKEND_HOST=http://192.168.15.101:8000
+flutter run --dart-define=BACKEND_HOST=http://192.168.xx.xxx:8000
 ```
 
 ---
