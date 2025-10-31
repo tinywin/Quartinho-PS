@@ -149,7 +149,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         return {
             'id': msg.id,
             'conversation': conv.id,
-            'sender': {'id': sender.id, 'nome': getattr(sender, 'nome', '' )},
+            'sender': {'id': sender.id, 'nome': getattr(sender, 'nome', '')},
             'recipient': {'id': recipient.id, 'nome': getattr(recipient, 'nome', '')},
             'text': msg.text,
             'type': getattr(msg, 'type', 'text'),
