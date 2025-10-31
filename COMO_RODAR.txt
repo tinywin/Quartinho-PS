@@ -338,5 +338,3 @@ flutter run
 ```
 
 ---
-
-🎉 **Pronto!** Agora é só desenvolver! Se tiver dúvidas, veja a seção de Troubleshooting acima.
