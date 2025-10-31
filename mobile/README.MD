@@ -1,7 +1,7 @@
 # 📱 Quartinho-PS Mobile
-Bem-vindo,
 
-Aplicativo **Flutter** do **Quartinho-PS**, que consome a API Django e usa **WebSockets via Daphne** para chat em tempo real.
+Bem-vindo(a)! 👋
+Este é o aplicativo **Flutter** do **Quartinho-PS**, que consome a API Django e usa **WebSockets via Daphne** para chat em tempo real.
 
 Agora o backend pode ser configurado dinamicamente com:
 
@@ -13,10 +13,26 @@ sem precisar editar o código.
 
 ---
 
+## 🚨 **ATENÇÃO: ARQUIVO ESSENCIAL**
+
+> ⚠️ **Verifique sempre o arquivo:**
+> **`mobile/lib/core/constants.dart`**
+
+📍 Esse arquivo define **qual URL o app usa para o backend** (API + WebSocket).
+Ele detecta automaticamente se está no **emulador, navegador ou celular físico**, mas:
+
+* Se algo der errado na conexão, **confira se o IP e a porta estão corretos**;
+* É nele que ficam as constantes `_hostLan`, `_hostAndroidEmu`, `_hostWeb` etc.
+
+💡 **Dica:**
+Se mudar de rede Wi-Fi ou usar outro computador, atualize o IP lá ou use `--dart-define`.
+
+---
+
 ## 🧩 Pré-requisitos
 
-* **Flutter SDK** instalado ([guia oficial](https://docs.flutter.dev/get-started/install))
-* **Backend Django** rodando com **Daphne**
+* **Flutter SDK** ([guia oficial](https://docs.flutter.dev/get-started/install))
+* **Backend Django rodando com Daphne**
 * Celular e computador conectados na **mesma rede Wi-Fi**
 
 ---
@@ -41,26 +57,28 @@ Endereço IPv4 . . . . . . . . . . . : 192.168.xx.xxx
 
 ### 2️⃣ Configure o host do backend (sem editar código)
 
-Use `--dart-define=BACKEND_HOST` para informar o IP/porta.
+Use `--dart-define=BACKEND_HOST` para informar o IP/porta:
 
-| Ambiente                         | Comando                                                                        |
-| -------------------------------- | ------------------------------------------------------------------------------ |
-| **Android Emulador**             | `flutter run -d emulator-5554 --dart-define=BACKEND_HOST=http://10.0.2.2:8000` |
-| **Celular Físico (mesmo Wi-Fi)** | `flutter run --dart-define=BACKEND_HOST=http://192.168.xx.xxx:8000`            |
-| **Web (Chrome)**                 | `flutter run -d chrome --dart-define=BACKEND_HOST=http://127.0.0.1:8000`       |
+| Ambiente                   | Comando                                                                  |
+| -------------------------- | ------------------------------------------------------------------------ |
+| **Android Emulador**       | `flutter run --dart-define=BACKEND_HOST=http://10.0.2.2:8000`            |
+| **Celular Físico (Wi-Fi)** | `flutter run --dart-define=BACKEND_HOST=http://192.168.xx.xxx:8000`      |
+| **Web (Chrome)**           | `flutter run -d chrome --dart-define=BACKEND_HOST=http://127.0.0.1:8000` |
+
+> 💡 Você não precisa usar `-d emulator-5554` se o Flutter já detectar o dispositivo automaticamente.
 
 ---
 
 ### 3️⃣ Conecte o dispositivo
 
-* **Android:** ative a **Depuração USB** e permita a conexão.
+* **Android:** ative a **Depuração USB** e aceite a conexão.
 * **iOS:** use um **Mac com Xcode**.
 
 ---
 
-### 4️⃣ Verifique permissão de internet (Android)
+### 4️⃣ Permissão de internet (Android)
 
-No arquivo `android/app/src/main/AndroidManifest.xml`, confirme a linha:
+Em `android/app/src/main/AndroidManifest.xml`, confirme:
 
 ```xml
 <uses-permission android:name="android.permission.INTERNET"/>
@@ -70,7 +88,7 @@ No arquivo `android/app/src/main/AndroidManifest.xml`, confirme a linha:
 
 ### 5️⃣ Rode o backend com **Daphne (ASGI)**
 
-Agora o chat usa **WebSockets**, então o servidor deve rodar com **Daphne**, não com `runserver`.
+O chat usa WebSockets — por isso **não use `runserver`**.
 
 ```bash
 cd backend
@@ -78,7 +96,7 @@ cd backend
 daphne -b 0.0.0.0 -p 8000 backend.asgi:application
 ```
 
-> ⚠️ Se usar `python manage.py runserver`, o chat **não funcionará** (WebSocket falhará).
+> ⚠️ Se rodar com `python manage.py runserver`, o chat **não funcionará** (WebSocket falhará).
 
 ---
 
@@ -87,10 +105,10 @@ daphne -b 0.0.0.0 -p 8000 backend.asgi:application
 ```bash
 cd mobile
 flutter pub get
-flutter run -d emulator-5554 --dart-define=BACKEND_HOST=http://10.0.2.2:8000
+flutter run
 ```
 
-Troque o dispositivo ou o IP conforme necessário.
+Troque o IP conforme necessário se estiver em celular físico.
 
 ---
 
@@ -102,27 +120,27 @@ Troque o dispositivo ou o IP conforme necessário.
   ```
   /ws/chat/?token=JWT_TOKEN
   ```
-* O backend **precisa estar com Daphne ativo**
+* O backend **precisa estar rodando com Daphne**
 
-Se ocorrer erro `"Connection reset by peer"`:
+Se ocorrer `"Connection reset by peer"`:
 
-* ✅ Verifique se o Daphne está rodando
-* ✅ Confirme o IP correto em `--dart-define`
-* ✅ Celular e PC estão na **mesma rede Wi-Fi**
-* ✅ Firewall do Windows não bloqueia a porta 8000
+* ✅ Verifique se o Daphne está ativo
+* ✅ Confirme o IP em `--dart-define`
+* ✅ Celular e PC estão na **mesma rede**
+* ✅ Firewall não bloqueia a porta 8000
 
 ---
 
 ## 🧠 Dicas úteis
 
-* Teste o backend direto no navegador do celular:
+* Teste o backend direto no celular:
 
   ```
   http://192.168.xx.xxx:8000/api/
   ```
-* **Emulador Android:** use `http://10.0.2.2:8000`
-* **Celular físico:** use o IP LAN (`192.168.xx.xxx`)
-* No Django `settings.py`, mantenha:
+* **Emulador Android:** `http://10.0.2.2:8000`
+* **Celular físico:** `http://192.168.xx.xxx:8000`
+* No Django `settings.py`:
 
   ```python
   ALLOWED_HOSTS = ['*']
@@ -133,12 +151,12 @@ Se ocorrer erro `"Connection reset by peer"`:
 
 ## 🐛 Erros comuns
 
-| Erro                              | Causa                            | Solução                                                       |
-| --------------------------------- | -------------------------------- | ------------------------------------------------------------- |
-| ❌ *“WebSocket connection failed”* | Servidor rodando com `runserver` | Rode com `daphne -b 0.0.0.0 -p 8000 backend.asgi:application` |
-| ❌ *“Connection refused”*          | IP incorreto no Flutter          | Corrija `--dart-define=BACKEND_HOST=http://SEU_IP:8000`       |
-| ❌ *“User not authenticated”*      | Token JWT inválido               | Refazer login e obter novo token                              |
-| ❌ *“DisallowedHost”*              | IP não está em `ALLOWED_HOSTS`   | Adicione `'*'` no settings durante desenvolvimento            |
+| Erro                              | Causa                          | Solução                                                       |
+| --------------------------------- | ------------------------------ | ------------------------------------------------------------- |
+| ❌ *“WebSocket connection failed”* | Usando `runserver`             | Rode com `daphne -b 0.0.0.0 -p 8000 backend.asgi:application` |
+| ❌ *“Connection refused”*          | IP errado no Flutter           | Corrija `--dart-define=BACKEND_HOST=http://SEU_IP:8000`       |
+| ❌ *“User not authenticated”*      | Token JWT inválido             | Refazer login                                                 |
+| ❌ *“DisallowedHost”*              | IP não está em `ALLOWED_HOSTS` | Adicione `'*'` no settings                                    |
 
 ---
 
@@ -155,5 +173,3 @@ cd mobile
 flutter pub get
 flutter run --dart-define=BACKEND_HOST=http://192.168.xx.xxx:8000
 ```
-
----
