@@ -1,5 +1,6 @@
 # 📱 Quartinho-PS Mobile
 Bem-vindo,
+
 Aplicativo **Flutter** do **Quartinho-PS**, que consome a API Django e usa **WebSockets via Daphne** para chat em tempo real.
 
 Agora o backend pode ser configurado dinamicamente com:
