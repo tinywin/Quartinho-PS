@@ -37,7 +37,7 @@ ipconfig
 Procure o campo:
 
 ```
-Endereço IPv4 . . . . . . . . . . . : 192.168.15.101
+Endereço IPv4 . . . . . . . . . . . : 192.168.xx.xxx
 ```
 
 ---
