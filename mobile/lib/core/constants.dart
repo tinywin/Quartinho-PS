@@ -9,7 +9,7 @@ const String _hostWeb = 'http://127.0.0.1:8000';
 // IP local do computador (para celular físico)
 const String _hostLan = 'http://192.168.10.122:8000';
 // IP do host quando está rodando em emulador Android
-const String _hostAndroidEmu = 'http://10.0.2.2:8000';
+const String _hostAndroidEmu = 'http://192.168.10.122:8000';
 
 String get backendHost {
   // Se BACKEND_HOST foi passado via dart-define, usar diretamente.

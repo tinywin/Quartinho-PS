@@ -9,6 +9,7 @@ import '../../core/services/favorites_service.dart';
 import '../../core/services/auth_service.dart';
 // import 'contrato_aluguel_page.dart';
 import 'chat_page.dart';
+import 'contrato_aluguel_page.dart';
 
 class ImovelDetalhePage extends StatelessWidget {
   final Map imovel;
@@ -136,12 +137,8 @@ class ImovelDetalhePage extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                           onPressed: () {
-                            final owner = (imovel['proprietario'] ?? imovel['dono']) as Map?;
-                            final ownerId = owner != null ? (owner['id'] is int ? owner['id'] as int : int.tryParse(owner['id']?.toString() ?? '')) : null;
-                            final ownerName = owner != null ? (owner['nome'] ?? owner['nome_completo'] ?? owner['username'] ?? 'Proprietário').toString() : 'Proprietário';
-                            if (ownerId != null) {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(ownerId: ownerId, ownerName: ownerName)));
-                            }
+                            // Navega para o fluxo de contrato de aluguel, passando o imóvel atual
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => ContratoAluguelPage(imovel: imovel)));
                           },
                           child: Text('Eu quero!', style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF6E56CF))),
                         ),
