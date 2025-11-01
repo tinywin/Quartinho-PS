@@ -5,9 +5,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:pdfx/pdfx.dart';
+import 'package:flutter/services.dart';
 import 'package:http_parser/http_parser.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/constants.dart';
+import '../../core/utils/url_launcher_service.dart';
+import '../../core/utils/download_service.dart';
 
 class ContratoDetalhePage extends StatefulWidget {
   final int contratoId;
@@ -372,53 +376,107 @@ class _ContratoDetalhePageState extends State<ContratoDetalhePage> {
                       if (_data!['comprovante'] != null) ...[
                         Text('Comprovante enviado pelo solicitante:', style: const TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
-                        Row(children: [
-                          const Icon(Icons.picture_as_pdf, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextButton(
-                              onPressed: () {
-                                final url = _data!['comprovante'] as String;
-                                Navigator.push(context, MaterialPageRoute(builder: (_) => _ComprovantePreview(url: url)));
-                              },
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(_fileNameFromUrl(_data!['comprovante'] as String, 'Ver comprovante'), style: TextStyle(color: Theme.of(context).primaryColor)),
-                              ),
+                        Card(
+                          color: const Color(0xFFF7F7FB),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          child: ListTile(
+                            leading: const Icon(Icons.picture_as_pdf, size: 28),
+                            title: Text(_fileNameFromUrl(_data!['comprovante'] as String, 'Ver comprovante')),
+                            onTap: () {
+                              final url = _data!['comprovante'] as String;
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => _ComprovantePreview(url: url)));
+                            },
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.open_in_new),
+                                  tooltip: 'Abrir',
+                                  onPressed: () => DownloadService.downloadAndOpen(context, _data!['comprovante'] as String),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.open_in_browser),
+                                  tooltip: 'Abrir no navegador',
+                                  onPressed: () => UrlLauncherService.openUrlExternal(context, _data!['comprovante'] as String),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.download_rounded),
+                                  tooltip: 'Baixar (abrir no navegador)',
+                                  onPressed: () => UrlLauncherService.openUrlExternal(context, _data!['comprovante'] as String),
+                                ),
+                              ],
                             ),
                           ),
-                        ]),
+                        ),
                         const SizedBox(height: 12),
                       ],
                       if (_data!['contrato_final'] != null) ...[
                         Text('Contrato final anexado:', style: const TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
-                        Row(children: [
-                          const Icon(Icons.description, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextButton(
-                              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _ComprovantePreview(url: _data!['contrato_final']))),
-                              child: Align(alignment: Alignment.centerLeft, child: Text(_fileNameFromUrl(_data!['contrato_final'] as String, 'Ver contrato final'), style: TextStyle(color: Theme.of(context).primaryColor))),
+                        Card(
+                          color: const Color(0xFFF7F7FB),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          child: ListTile(
+                            leading: const Icon(Icons.description, size: 28),
+                            title: Text(_fileNameFromUrl(_data!['contrato_final'] as String, 'Ver contrato final')),
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _ComprovantePreview(url: _data!['contrato_final']))),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.open_in_new),
+                                  tooltip: 'Abrir',
+                                  onPressed: () => DownloadService.downloadAndOpen(context, _data!['contrato_final'] as String),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.open_in_browser),
+                                  tooltip: 'Abrir no navegador',
+                                  onPressed: () => UrlLauncherService.openUrlExternal(context, _data!['contrato_final'] as String),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.download_rounded),
+                                  tooltip: 'Baixar (abrir no navegador)',
+                                  onPressed: () => UrlLauncherService.openUrlExternal(context, _data!['contrato_final'] as String),
+                                ),
+                              ],
                             ),
                           ),
-                        ]),
+                        ),
                         const SizedBox(height: 12),
                       ],
                       // show contrato assinado to both parties when available
                       if (_data!['contrato_assinado'] != null) ...[
                         Text('Contrato assinado (enviado pelo solicitante):', style: const TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
-                        Row(children: [
-                          const Icon(Icons.how_to_reg, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextButton(
-                              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _ComprovantePreview(url: _data!['contrato_assinado']))),
-                              child: Align(alignment: Alignment.centerLeft, child: Text(_fileNameFromUrl(_data!['contrato_assinado'] as String, 'Ver contrato assinado'), style: TextStyle(color: Theme.of(context).primaryColor))),
+                        Card(
+                          color: const Color(0xFFF7F7FB),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          child: ListTile(
+                            leading: const Icon(Icons.how_to_reg, size: 28),
+                            title: Text(_fileNameFromUrl(_data!['contrato_assinado'] as String, 'Ver contrato assinado')),
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _ComprovantePreview(url: _data!['contrato_assinado']))),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.open_in_new),
+                                  tooltip: 'Abrir',
+                                  onPressed: () => DownloadService.downloadAndOpen(context, _data!['contrato_assinado'] as String),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.open_in_browser),
+                                  tooltip: 'Abrir no navegador',
+                                  onPressed: () => UrlLauncherService.openUrlExternal(context, _data!['contrato_assinado'] as String),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.download_rounded),
+                                  tooltip: 'Baixar (abrir no navegador)',
+                                  onPressed: () => UrlLauncherService.openUrlExternal(context, _data!['contrato_assinado'] as String),
+                                ),
+                              ],
                             ),
                           ),
-                        ]),
+                        ),
                         const SizedBox(height: 12),
                       ],
                       const Divider(),
@@ -470,15 +528,113 @@ class _ContratoDetalhePageState extends State<ContratoDetalhePage> {
   }
 }
 
-class _ComprovantePreview extends StatelessWidget {
+class _ComprovantePreview extends StatefulWidget {
   final String url;
   const _ComprovantePreview({required this.url});
 
   @override
+  State<_ComprovantePreview> createState() => _ComprovantePreviewState();
+}
+
+class _ComprovantePreviewState extends State<_ComprovantePreview> {
+  late Future<PdfDocument?> _docFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _docFuture = _loadIfPdf();
+  }
+
+  Future<PdfDocument?> _loadIfPdf() async {
+    final url = widget.url;
+    final lower = url.toLowerCase();
+    if (!lower.endsWith('.pdf')) return null;
+
+    String finalUrl = url;
+    if (!finalUrl.startsWith('http')) {
+      if (finalUrl.startsWith('/')) finalUrl = '$backendHost$finalUrl';
+      else finalUrl = '$backendHost/$finalUrl';
+    }
+
+    try {
+      final resp = await http.get(Uri.parse(finalUrl));
+      if (resp.statusCode == 200) {
+        return PdfDocument.openData(resp.bodyBytes);
+      }
+    } catch (e) {
+      // fallthrough
+    }
+    return null;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final url = widget.url;
+    final lower = url.toLowerCase();
+    if (lower.endsWith('.pdf')) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Arquivo (PDF)')),
+        body: FutureBuilder<PdfDocument?>(
+          future: _docFuture,
+          builder: (context, snap) {
+            if (snap.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+            if (snap.hasError || snap.data == null) {
+              return _fallbackView(context, url);
+            }
+            final doc = snap.data!;
+            final controller = PdfControllerPinch(document: Future.value(doc));
+            return PdfViewPinch(controller: controller);
+          },
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Arquivo')),
-      body: Center(child: Image.network(url, errorBuilder: (_, __, ___) => SelectableText(url))),
+      body: Center(child: Image.network(url, errorBuilder: (_, __, ___) => _fallbackView(context, url))),
+    );
+  }
+
+  Widget _fallbackView(BuildContext context, String url) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.insert_drive_file, size: 64, color: Colors.grey),
+          const SizedBox(height: 10),
+          const Text('Arquivo não pode ser exibido aqui.'),
+          const SizedBox(height: 8),
+          SelectableText(url, textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.copy),
+            label: const Text('Copiar link'),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: url));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Link copiado')));
+            },
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.open_in_new),
+            label: const Text('Abrir no navegador'),
+            onPressed: () => UrlLauncherService.openUrlExternal(context, url),
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.open_in_new_outlined),
+            label: const Text('Abrir (baixar e abrir)'),
+            onPressed: () => DownloadService.downloadAndOpen(context, url),
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.download_rounded),
+            label: const Text('Baixar'),
+            onPressed: () => UrlLauncherService.openUrlExternal(context, url),
+          ),
+        ],
+      ),
     );
   }
 }
