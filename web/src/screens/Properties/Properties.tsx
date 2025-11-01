@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, MapPin, Heart, Star, Bed, Bath, Car, Wifi } from "lucide-react";
+import { Search, MapPin, Heart, Star, Bed, Bath, Car, Wifi, Bell } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import axios from "axios";
 import { API_BASE_URL, getAuthHeaders } from "../../utils/apiConfig";
@@ -35,6 +35,14 @@ interface Property {
   media?: number;
 }
 
+interface Notification {
+  id: number;
+  mensagem: string;
+  lida: boolean;
+  data_criacao: string;
+  imovel?: number; // ID do imóvel
+}
+
 export const Properties = (): JSX.Element => {
   // debug: confirmar montagem do componente
   // eslint-disable-next-line no-console
@@ -59,7 +67,11 @@ export const Properties = (): JSX.Element => {
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
-
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const notificationMenuRef = useRef<HTMLDivElement | null>(null);
 
 
   useEffect(() => {
@@ -96,6 +108,7 @@ export const Properties = (): JSX.Element => {
     };
 
     fetchCurrentUser();
+    fetchUnreadCount();
     // only run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -107,10 +120,13 @@ export const Properties = (): JSX.Element => {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
         setShowUserMenu(false);
       }
+      if (notificationMenuRef.current && !notificationMenuRef.current.contains(e.target as Node)) {
+        setShowNotifications(false);
+      }      
     };
     document.addEventListener('click', onDocClick);
     return () => document.removeEventListener('click', onDocClick);
-  }, [showUserMenu]);
+  }, [showUserMenu, showNotifications]);
 
   const getUserAvatar = (u: any) => {
     if (!u) return null;
@@ -190,6 +206,96 @@ export const Properties = (): JSX.Element => {
       setLoading(false);
     }
   };
+
+const fetchUnreadCount = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/notificacoes/contagem_nao_lida/`, {
+        headers: getAuthHeaders(),
+      });
+      setUnreadCount(response.data.count || 0);
+    } catch (error) {
+      console.error("Erro ao buscar contagem de notificações:", error);
+    }
+  };
+
+  /**
+   * Busca a lista completa de notificações.
+   */
+  const fetchNotifications = async () => {
+    setLoadingNotifications(true);
+    try {
+      const response = await axios.get(`${API_BASE_URL}/notificacoes/`, {
+        headers: getAuthHeaders(),
+      });
+      // A API retorna a lista direto ou dentro de 'results'
+      const data = response.data;
+      if (Array.isArray(data)) {
+        setNotifications(data);
+      } else if (data && Array.isArray(data.results)) {
+        setNotifications(data.results);
+      }
+    } catch (error) {
+      console.error("Erro ao buscar notificações:", error);
+    } finally {
+      setLoadingNotifications(false);
+    }
+  };
+
+  /**
+   * Marca todas as notificações como lidas no backend.
+   */
+  const markAllAsRead = async () => {
+    try {
+      await axios.post(
+        `${API_BASE_URL}/notificacoes/marcar_todas_como_lidas/`,
+        {},
+        { headers: getAuthHeaders() }
+      );
+      // Atualiza o estado local
+      setUnreadCount(0);
+      setNotifications((prev) => prev.map(n => ({ ...n, lida: true })));
+    } catch (error) {
+      console.error("Erro ao marcar notificações como lidas:", error);
+    }
+  };
+
+  /**
+   * Ação de clique no ícone de sino.
+   */
+  const handleBellClick = () => {
+    // Fecha o outro menu se estiver aberto
+    setShowUserMenu(false);
+    
+    // Se está fechando o menu, não faz nada
+    if (showNotifications) {
+      setShowNotifications(false);
+      return;
+    }
+
+    // Se está abrindo o menu
+    setShowNotifications(true);
+    fetchNotifications(); // Busca a lista
+    
+    // Se tinha notificações não lidas, marca todas como lidas
+    if (unreadCount > 0) {
+      markAllAsRead();
+    }
+  };
+
+  /**
+   * Helper para formatar a data da notificação.
+   */
+  const formatNotificationDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date);
+  };
+
 
   const handleSearch = () => {
     setFilters(prev => ({ ...prev, q: searchTerm, cidade: "" }));
@@ -338,9 +444,65 @@ export const Properties = (): JSX.Element => {
               </Button>
 
             <div className="ml-auto" />
+
+<div ref={notificationMenuRef} className="relative">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleBellClick(); }}
+                className="p-2 rounded-full text-gray-600 hover:bg-gray-100 focus:outline-none relative"
+                aria-label="Notificações"
+              >
+                <Bell className="w-6 h-6" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-0 right-0 block h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-bold ring-2 ring-white">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Dropdown de Notificações */}
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 md:w-96 bg-white border rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
+                  <div className="p-4 border-b">
+                    <h3 className="text-lg font-semibold text-gray-900">Notificações</h3>
+                  </div>
+                  {loadingNotifications ? (
+                    <div className="p-6 text-center text-gray-500">
+                      Carregando...
+                    </div>
+                  ) : notifications.length === 0 ? (
+                    <div className="p-6 text-center text-gray-500">
+                      Nenhuma notificação ainda.
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {notifications.map((notif) => (
+                        <div key={notif.id} className={`p-4 hover:bg-gray-50 ${!notif.lida ? 'bg-orange-50' : ''}`}>
+                          <p className="text-sm text-gray-700">
+                            {notif.mensagem}
+                          </p>
+                          <span className="text-xs text-gray-500 mt-1 block">
+                            {formatNotificationDate(notif.data_criacao)}
+                          </span>
+                          {/* Opcional: Link para o imóvel */}
+                          {notif.imovel && (
+                            <button
+                              onClick={() => navigate(`/properties/${notif.imovel}`)}
+                              className="text-sm text-orange-600 hover:underline mt-2"
+                            >
+                              Ver imóvel
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>            
+
             <div ref={userMenuRef} className="relative">
               <button
-                onClick={(e) => { e.stopPropagation(); setShowUserMenu((v) => !v); }}
+                onClick={(e) => { e.stopPropagation(); setShowUserMenu((v) => !v); setShowNotifications(false) }}
                 className="flex items-center focus:outline-none"
               >
                 {(() => {
