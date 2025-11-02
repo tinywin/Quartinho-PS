@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, MapPin, Heart, Star, Bed, Bath, Car, Wifi, Bell } from "lucide-react";
+import { Search, MapPin, Heart, Star, Bed, Bath, Car, Wifi, Bell, X } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import axios from "axios";
 import { API_BASE_URL, getAuthHeaders } from "../../utils/apiConfig";
@@ -301,6 +301,43 @@ const fetchUnreadCount = async () => {
     }).format(date);
   };
 
+const handleDeleteNotification = async (e: React.MouseEvent, notificationId: number) => {
+    e.stopPropagation(); 
+    
+    const notificationToRemove = notifications.find(n => n.id === notificationId);
+    setNotifications(prev => prev.filter(n => n.id !== notificationId));
+    
+    if (notificationToRemove && !notificationToRemove.lida) {
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    }
+
+    try {
+      await axios.delete(`${API_BASE_URL}/notificacoes/${notificationId}/`, {
+        headers: getAuthHeaders(),
+      });
+    } catch (error) {
+      console.error("Erro ao excluir notificação:", error);
+      fetchNotifications();
+      fetchUnreadCount();
+    }
+  };
+
+  const handleDeleteAllNotifications = async () => {
+    // Atualização Otimista
+    setNotifications([]);
+    setUnreadCount(0);
+    
+    try {
+      await axios.delete(
+        `${API_BASE_URL}/notificacoes/excluir_todas/`,
+        { headers: getAuthHeaders() }
+      );
+    } catch (error) {
+      console.error("Erro ao excluir todas as notificações:", error);
+      fetchNotifications();
+      fetchUnreadCount();
+    }
+  };  
 
   const handleSearch = () => {
     setFilters(prev => ({ ...prev, q: searchTerm, cidade: "" }));
@@ -486,8 +523,16 @@ const fetchUnreadCount = async () => {
               {/* Dropdown de Notificações */}
               {showNotifications && (
                 <div className="absolute right-0 mt-2 w-80 md:w-96 bg-white border rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
-                  <div className="p-4 border-b">
+                  <div className="flex justify-between items-center p-4 border-b">
                     <h3 className="text-lg font-semibold text-gray-900">Notificações</h3>
+                    {notifications.length > 0 && (
+                      <button
+                        onClick={handleDeleteAllNotifications} // Chama a nova função
+                        className="text-sm font-medium text-orange-600 hover:text-orange-800 hover:underline"
+                      >
+                        Limpar Tudo
+                      </button>
+                    )}
                   </div>
                   {loadingNotifications ? (
                     <div className="p-6 text-center text-gray-500">
@@ -500,22 +545,27 @@ const fetchUnreadCount = async () => {
                   ) : (
                     <div className="divide-y">
                       {notifications.map((notif) => (
-                        <div key={notif.id} className={`p-4 hover:bg-gray-50 ${!notif.lida ? 'bg-orange-50' : ''}`}>
+                        <div key={notif.id} className={`p-4 hover:bg-gray-50 relative group cursor-pointer ${!notif.lida ? 'bg-white' : 'bg-orange-50'}`}
+                        onClick={() => {
+                            if (notif.imovel) {
+                              navigate(`/properties/${notif.imovel}`);
+                              setShowNotifications(false);
+                            }
+                          }}                        
+                        >
                           <p className="text-sm text-gray-700">
                             {notif.mensagem}
                           </p>
                           <span className="text-xs text-gray-500 mt-1 block">
                             {formatNotificationDate(notif.data_criacao)}
                           </span>
-                          {/* Opcional: Link para o imóvel */}
-                          {notif.imovel && (
-                            <button
-                              onClick={() => navigate(`/properties/${notif.imovel}`)}
-                              className="text-sm text-orange-600 hover:underline mt-2"
-                            >
-                              Ver imóvel
-                            </button>
-                          )}
+                          <button
+                            onClick={(e) => handleDeleteNotification(e, notif.id)}
+                            className="absolute top-2 right-2 p-1 rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                            aria-label="Excluir notificação"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
                         </div>
                       ))}
                     </div>

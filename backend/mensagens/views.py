@@ -75,7 +75,12 @@ class MessageListCreateView(generics.GenericAPIView):
         # create notification record and try to send push (best-effort)
         try:
             from notificacoes.models import Notificacao
-            Notificacao.objects.create(usuario=other, mensagem=f'{request.user} te enviou uma mensagem')
+            sender_name = getattr(request.user, "nome", None)
+            if not sender_name:
+                sender_name = getattr(request.user, "first_name", None)
+            if not sender_name:
+                sender_name = request.user.username
+            Notificacao.objects.create(usuario=other, mensagem=f'{sender_name} te enviou uma mensagem')
         except Exception:
             pass
         try:
