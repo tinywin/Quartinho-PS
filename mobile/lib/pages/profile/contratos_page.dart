@@ -231,24 +231,19 @@ class _ContratosPageState extends State<ContratosPage> {
                                               leading: const Icon(Icons.insert_drive_file, size: 28),
                                               title: Text(_fileNameFromUrl(url, 'Abrir comprovante')),
                                               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _ComprovantePreview(url: url))),
-                                              trailing: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  IconButton(
-                                                    icon: const Icon(Icons.open_in_new),
-                                                    tooltip: 'Abrir',
-                                                    onPressed: () => DownloadService.downloadAndOpen(context, url),
-                                                  ),
-                                                  IconButton(
-                                                    icon: const Icon(Icons.open_in_browser),
-                                                    tooltip: 'Abrir no navegador',
-                                                    onPressed: () => UrlLauncherService.openUrlExternal(ctx, url),
-                                                  ),
-                                                  IconButton(
-                                                    icon: const Icon(Icons.download_rounded),
-                                                    tooltip: 'Baixar (abrir no navegador)',
-                                                    onPressed: () => UrlLauncherService.openUrlExternal(ctx, url),
-                                                  ),
+                                              trailing: PopupMenuButton<String>(
+                                                icon: const Icon(Icons.more_vert),
+                                                onSelected: (value) {
+                                                  if (value == 'open') {
+                                                    DownloadService.downloadAndOpen(context, url);
+                                                  } else if (value == 'browser' || value == 'download') {
+                                                    UrlLauncherService.openUrlExternal(ctx, url);
+                                                  }
+                                                },
+                                                itemBuilder: (ctx2) => [
+                                                  const PopupMenuItem(value: 'open', child: ListTile(leading: Icon(Icons.open_in_new), title: Text('Abrir (baixar e abrir)'))),
+                                                  const PopupMenuItem(value: 'browser', child: ListTile(leading: Icon(Icons.open_in_browser), title: Text('Abrir no navegador'))),
+                                                  const PopupMenuItem(value: 'download', child: ListTile(leading: Icon(Icons.download_rounded), title: Text('Baixar'))),
                                                 ],
                                               ),
                                             ),

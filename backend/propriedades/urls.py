@@ -10,6 +10,7 @@ router.register(r'contratos', ContratoSolicitacaoViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    # Payment webhooks removed
     path('propriedade/<int:propriedade_id>/favoritar/', views.favoritar_propriedade, name='favoritar_propriedade'),
     path('favoritos/', views.lista_favoritos, name='lista_favoritos'),    
 ]

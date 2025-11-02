@@ -12,6 +12,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/constants.dart';
 import '../../core/utils/url_launcher_service.dart';
 import '../../core/utils/download_service.dart';
+import '../payments/pagamento_page.dart';
 
 class ContratoDetalhePage extends StatefulWidget {
   final int contratoId;
@@ -29,6 +30,7 @@ class _ContratoDetalhePageState extends State<ContratoDetalhePage> {
   int? _currentUserId;
   bool _isOwner = false;
   bool _isSolicitante = false;
+  bool _paying = false;
 
   @override
   void initState() {
@@ -353,6 +355,29 @@ class _ContratoDetalhePageState extends State<ContratoDetalhePage> {
     }
   }
 
+  Future<void> _pagarPrimeiroAluguel() async {
+    // Open the payment page (payments are currently disabled/placeholder)
+    final contrato = _data;
+    if (contrato == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dados do contrato não carregados')));
+      return;
+    }
+
+    String titulo = 'Primeiro Aluguel';
+    double valor = 0.0;
+    try {
+      final imovel = contrato['imovel'];
+      if (imovel is Map) {
+        titulo = imovel['titulo'] ?? titulo;
+        final p = imovel['preco'];
+        if (p is num) valor = p.toDouble();
+        else if (p is String) valor = double.tryParse(p) ?? 0.0;
+      }
+    } catch (_) {}
+
+    Navigator.push(context, MaterialPageRoute(builder: (_) => PagamentoPage(contratoId: widget.contratoId, titulo: titulo, valor: valor)));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -386,24 +411,22 @@ class _ContratoDetalhePageState extends State<ContratoDetalhePage> {
                               final url = _data!['comprovante'] as String;
                               Navigator.push(context, MaterialPageRoute(builder: (_) => _ComprovantePreview(url: url)));
                             },
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.open_in_new),
-                                  tooltip: 'Abrir',
-                                  onPressed: () => DownloadService.downloadAndOpen(context, _data!['comprovante'] as String),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.open_in_browser),
-                                  tooltip: 'Abrir no navegador',
-                                  onPressed: () => UrlLauncherService.openUrlExternal(context, _data!['comprovante'] as String),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.download_rounded),
-                                  tooltip: 'Baixar (abrir no navegador)',
-                                  onPressed: () => UrlLauncherService.openUrlExternal(context, _data!['comprovante'] as String),
-                                ),
+                            trailing: PopupMenuButton<String>(
+                              icon: const Icon(Icons.more_vert),
+                              onSelected: (value) {
+                                final url = _data!['comprovante'] as String;
+                                if (value == 'open') {
+                                  DownloadService.downloadAndOpen(context, url);
+                                } else if (value == 'browser') {
+                                  UrlLauncherService.openUrlExternal(context, url);
+                                } else if (value == 'download') {
+                                  UrlLauncherService.openUrlExternal(context, url);
+                                }
+                              },
+                              itemBuilder: (ctx) => [
+                                const PopupMenuItem(value: 'open', child: ListTile(leading: Icon(Icons.open_in_new), title: Text('Abrir (baixar e abrir)'))),
+                                const PopupMenuItem(value: 'browser', child: ListTile(leading: Icon(Icons.open_in_browser), title: Text('Abrir no navegador'))),
+                                const PopupMenuItem(value: 'download', child: ListTile(leading: Icon(Icons.download_rounded), title: Text('Baixar'))),
                               ],
                             ),
                           ),
@@ -420,24 +443,22 @@ class _ContratoDetalhePageState extends State<ContratoDetalhePage> {
                             leading: const Icon(Icons.description, size: 28),
                             title: Text(_fileNameFromUrl(_data!['contrato_final'] as String, 'Ver contrato final')),
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _ComprovantePreview(url: _data!['contrato_final']))),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.open_in_new),
-                                  tooltip: 'Abrir',
-                                  onPressed: () => DownloadService.downloadAndOpen(context, _data!['contrato_final'] as String),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.open_in_browser),
-                                  tooltip: 'Abrir no navegador',
-                                  onPressed: () => UrlLauncherService.openUrlExternal(context, _data!['contrato_final'] as String),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.download_rounded),
-                                  tooltip: 'Baixar (abrir no navegador)',
-                                  onPressed: () => UrlLauncherService.openUrlExternal(context, _data!['contrato_final'] as String),
-                                ),
+                            trailing: PopupMenuButton<String>(
+                              icon: const Icon(Icons.more_vert),
+                              onSelected: (value) {
+                                final url = _data!['contrato_final'] as String;
+                                if (value == 'open') {
+                                  DownloadService.downloadAndOpen(context, url);
+                                } else if (value == 'browser') {
+                                  UrlLauncherService.openUrlExternal(context, url);
+                                } else if (value == 'download') {
+                                  UrlLauncherService.openUrlExternal(context, url);
+                                }
+                              },
+                              itemBuilder: (ctx) => [
+                                const PopupMenuItem(value: 'open', child: ListTile(leading: Icon(Icons.open_in_new), title: Text('Abrir (baixar e abrir)'))),
+                                const PopupMenuItem(value: 'browser', child: ListTile(leading: Icon(Icons.open_in_browser), title: Text('Abrir no navegador'))),
+                                const PopupMenuItem(value: 'download', child: ListTile(leading: Icon(Icons.download_rounded), title: Text('Baixar'))),
                               ],
                             ),
                           ),
@@ -455,72 +476,95 @@ class _ContratoDetalhePageState extends State<ContratoDetalhePage> {
                             leading: const Icon(Icons.how_to_reg, size: 28),
                             title: Text(_fileNameFromUrl(_data!['contrato_assinado'] as String, 'Ver contrato assinado')),
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _ComprovantePreview(url: _data!['contrato_assinado']))),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.open_in_new),
-                                  tooltip: 'Abrir',
-                                  onPressed: () => DownloadService.downloadAndOpen(context, _data!['contrato_assinado'] as String),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.open_in_browser),
-                                  tooltip: 'Abrir no navegador',
-                                  onPressed: () => UrlLauncherService.openUrlExternal(context, _data!['contrato_assinado'] as String),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.download_rounded),
-                                  tooltip: 'Baixar (abrir no navegador)',
-                                  onPressed: () => UrlLauncherService.openUrlExternal(context, _data!['contrato_assinado'] as String),
-                                ),
+                            trailing: PopupMenuButton<String>(
+                              icon: const Icon(Icons.more_vert),
+                              onSelected: (value) {
+                                final url = _data!['contrato_assinado'] as String;
+                                if (value == 'open') {
+                                  DownloadService.downloadAndOpen(context, url);
+                                } else if (value == 'browser') {
+                                  UrlLauncherService.openUrlExternal(context, url);
+                                } else if (value == 'download') {
+                                  UrlLauncherService.openUrlExternal(context, url);
+                                }
+                              },
+                              itemBuilder: (ctx) => [
+                                const PopupMenuItem(value: 'open', child: ListTile(leading: Icon(Icons.open_in_new), title: Text('Abrir (baixar e abrir)'))),
+                                const PopupMenuItem(value: 'browser', child: ListTile(leading: Icon(Icons.open_in_browser), title: Text('Abrir no navegador'))),
+                                const PopupMenuItem(value: 'download', child: ListTile(leading: Icon(Icons.download_rounded), title: Text('Baixar'))),
                               ],
                             ),
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        //const SizedBox(height: 12),
+                        // Primeiro Aluguel button: show immediately below the signed contract only for the solicitante
+                        // (double-check the solicitante id to ensure the current user is the one who requested the contract)
+                        if (_isSolicitante && (_data!['solicitante'] is Map ? (_data!['solicitante']['id'] == _currentUserId) : true)) ...[
+                          ElevatedButton.icon(
+                            onPressed: _paying ? null : _pagarPrimeiroAluguel,
+                            icon: _paying ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.monetization_on),
+                            label: _paying ? const Text('Processando...') : const Text('Primeiro Aluguel'),
+                          ),
+                          //const SizedBox(height: 12),
+                        ],
                       ],
                       const Divider(),
-                      const SizedBox(height: 8),
+                      //const SizedBox(height: 8),
                       // Owner: can attach final contract
                       if (_isOwner) ...[
                         Text('Anexar contrato final (PDF/Imagem):', style: const TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            ElevatedButton.icon(onPressed: _showPickOptions, icon: const Icon(Icons.attach_file), label: const Text('Escolher arquivo')),
-                            const SizedBox(width: 12),
-                            if (_pickedFile != null) Expanded(child: Text(_pickedFile!.name)),
-                          ],
+                        LayoutBuilder(
+                          builder: (ctx, constraints) => Wrap(
+                            spacing: 12,
+                            runSpacing: 8,
+                            children: [
+                              ElevatedButton.icon(onPressed: _showPickOptions, icon: const Icon(Icons.attach_file), label: const Text('Escolher arquivo')),
+                              if (_pickedFile != null)
+                                ConstrainedBox(
+                                  constraints: BoxConstraints(maxWidth: (constraints.maxWidth - 160).clamp(80, constraints.maxWidth)),
+                                  child: Text(_pickedFile!.name, overflow: TextOverflow.ellipsis),
+                                ),
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 12),
+                        //const SizedBox(height: 12),
                         _loading
                             ? const Center(child: CircularProgressIndicator())
                             : ElevatedButton(onPressed: _pickedFile == null ? null : _upload, child: const Text('Enviar contrato')),
                       ] else if (_isSolicitante) ...[
                         // Solicitante: can view/download contrato_final and upload contrato_assinado
                         if (_data!['contrato_final'] != null) ...[
-                          Text('Contrato final anexado pelo proprietário:', style: const TextStyle(fontWeight: FontWeight.bold)),
+                          Text('', style: const TextStyle(fontWeight: FontWeight.bold)),
                           const SizedBox(height: 8),
                           GestureDetector(
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _ComprovantePreview(url: _data!['contrato_final']))),
                             child: Text('Ver/baixar contrato final', style: TextStyle(color: Theme.of(context).primaryColor)),
                           ),
-                          const SizedBox(height: 12),
+                          //const SizedBox(height: 12),
                         ],
                         Text('Enviar contrato assinado (PDF/Imagem):', style: const TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            ElevatedButton.icon(onPressed: _showPickOptionsAssinado, icon: const Icon(Icons.attach_file), label: const Text('Escolher arquivo')),
-                            const SizedBox(width: 12),
-                            if (_pickedFileSigned != null) Expanded(child: Text(_pickedFileSigned!.name)),
-                          ],
+                        LayoutBuilder(
+                          builder: (ctx, constraints) => Wrap(
+                            spacing: 12,
+                            runSpacing: 8,
+                            children: [
+                              ElevatedButton.icon(onPressed: _showPickOptionsAssinado, icon: const Icon(Icons.attach_file), label: const Text('Escolher arquivo')),
+                              if (_pickedFileSigned != null)
+                                ConstrainedBox(
+                                  constraints: BoxConstraints(maxWidth: (constraints.maxWidth - 160).clamp(80, constraints.maxWidth)),
+                                  child: Text(_pickedFileSigned!.name, overflow: TextOverflow.ellipsis),
+                                ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 12),
                         _loading
                             ? const Center(child: CircularProgressIndicator())
                             : ElevatedButton(onPressed: _pickedFileSigned == null ? null : _uploadAssinado, child: const Text('Enviar contrato assinado')),
                       ],
+                      const SizedBox(height: 12),
                     ],
                   ),
       ),

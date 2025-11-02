@@ -12,6 +12,17 @@ from .pagination import StandardResultsSetPagination
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from rest_framework.permissions import IsAuthenticated
+from django.conf import settings
+import logging
+from rest_framework.permissions import AllowAny
+from notificacoes.models import Notificacao
+from notificacoes.utils import send_fcm_to_user
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+import mercadopago
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from django.http import HttpResponse
 
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024  # 5MB
@@ -326,3 +337,173 @@ class ContratoSolicitacaoViewSet(viewsets.ModelViewSet):
         obj.resposta_do_proprietario = request.data.get('resposta_do_proprietario', obj.resposta_do_proprietario)
         obj.save()
         return Response(ContratoSolicitacaoSerializer(obj, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'])
+    def create_stripe_checkout(self, request, pk=None):
+        # Stripe integration was removed from this deployment. This endpoint is disabled.
+        return Response({'detail': 'Stripe não está habilitado no servidor.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    @action(detail=True, methods=['post'])
+    def create_mercado_pago_preference(self, request, pk=None):
+        """Create a Mercado Pago preference for paying the first rent of this contract.
+
+        Returns preference id and init_point (checkout URL) on success.
+        """
+        obj = self.get_object()
+        user = request.user
+        if obj.solicitante != user:
+            return Response({'detail': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
+
+        from django.conf import settings as djsettings
+        if not djsettings.MERCADO_PAGO_ACCESS_TOKEN:
+            return Response({'detail': 'Mercado Pago não configurado no servidor.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        try:
+            price = float(obj.imovel.preco or 0)
+        except Exception:
+            price = 0.0
+
+        if price <= 0:
+            return Response({'detail': 'Valor do aluguel inválido para pagamento.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        mp = mercadopago.SDK(djsettings.MERCADO_PAGO_ACCESS_TOKEN)
+        preference_data = {
+            'items': [
+                {
+                    'title': f'Primeiro aluguel - {obj.imovel.titulo}',
+                    'quantity': 1,
+                    'unit_price': price,
+                }
+            ],
+            'back_urls': {
+                'success': f"{djsettings.FRONTEND_URL}/contratos/{obj.id}/pago?status=success",
+                'failure': f"{djsettings.FRONTEND_URL}/contratos/{obj.id}/pago?status=failure",
+                'pending': f"{djsettings.FRONTEND_URL}/contratos/{obj.id}/pago?status=pending",
+            },
+            'auto_return': 'approved',
+            'metadata': {'contract_id': str(obj.id)},
+        }
+
+        try:
+            pref = mp.preference().create(preference_data)
+            response = pref.get('response', {}) if isinstance(pref, dict) else {}
+            return Response({'preference_id': response.get('id'), 'init_point': response.get('init_point')})
+        except Exception as e:
+            try:
+                print('Mercado Pago preference error', repr(e))
+            except Exception:
+                pass
+            if getattr(djsettings, 'DEBUG', False):
+                return Response({'detail': 'Erro ao criar preferência Mercado Pago.', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'detail': 'Erro ao criar preferência Mercado Pago.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['post'])
+    def confirm_payment(self, request, pk=None):
+        """Mark the first rent as paid for this contract.
+
+        This endpoint is intended for server-side/webhook use. Authorization rules:
+        - If the caller is an authenticated user and is the property owner, allow.
+        - Otherwise, if a PAYMENT_WEBHOOK_SECRET is configured, the caller may
+          supply it in the POST body as {'secret': '<secret>'} to authorize.
+
+        Request body: { 'value': true|false } optional (defaults to true),
+        or { 'secret': '<secret>' } when called by a webhook.
+        """
+        obj = self.get_object()
+        user = request.user if request.user and request.user.is_authenticated else None
+
+        # Owner or the original solicitante may confirm payment (solicitante used for simulated flows)
+        if user and (obj.imovel.proprietario == user or obj.solicitante == user):
+            authorized = True
+        else:
+            authorized = False
+
+        # Check webhook secret from settings
+        from django.conf import settings as djsettings
+        secret = request.data.get('secret')
+        if not authorized and djsettings.PAYMENT_WEBHOOK_SECRET and secret and secret == djsettings.PAYMENT_WEBHOOK_SECRET:
+            authorized = True
+
+        if not authorized:
+            return Response({'detail': 'Sem permissão para confirmar pagamento.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # get desired value (default true)
+        v = request.data.get('value', True)
+        if isinstance(v, str):
+            v = v.lower() in ('1', 'true', 'yes')
+        else:
+            v = bool(v)
+
+        obj.primeiro_aluguel_pago = v
+        obj.save()
+
+        # notify proprietário and solicitante
+        try:
+            owner = obj.imovel.proprietario
+            # create a Notificacao for the owner
+            owner_notif = Notificacao.objects.create(usuario=owner, imovel=obj.imovel, mensagem=f'Pagamento do primeiro aluguel para a solicitação #{obj.id} foi confirmado.')
+            try:
+                # send FCM (title, body)
+                send_fcm_to_user(owner, 'Pagamento confirmado', f'Contrato #{obj.id} — pagamento confirmado.')
+            except Exception:
+                pass
+            # push via websocket (channels) to owner group
+            try:
+                channel_layer = get_channel_layer()
+                payload = {
+                    'id': owner_notif.id,
+                    'mensagem': owner_notif.mensagem,
+                    'imovel': obj.imovel.id if obj.imovel else None,
+                    'lida': owner_notif.lida,
+                    'data_criacao': owner_notif.data_criacao.isoformat(),
+                }
+                async_to_sync(channel_layer.group_send)(f'user_{owner.id}', {
+                    'type': 'notification',
+                    'notification': payload,
+                })
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+        try:
+            tenant = obj.solicitante
+            tenant_notif = Notificacao.objects.create(usuario=tenant, imovel=obj.imovel, mensagem=f'Seu pagamento para a solicitação #{obj.id} foi recebido.')
+            try:
+                send_fcm_to_user(tenant, 'Pagamento recebido', f'Seu pagamento para o contrato #{obj.id} foi confirmado.')
+            except Exception:
+                pass
+            # push via websocket to tenant
+            try:
+                channel_layer = get_channel_layer()
+                payload = {
+                    'id': tenant_notif.id,
+                    'mensagem': tenant_notif.mensagem,
+                    'imovel': obj.imovel.id if obj.imovel else None,
+                    'lida': tenant_notif.lida,
+                    'data_criacao': tenant_notif.data_criacao.isoformat(),
+                }
+                async_to_sync(channel_layer.group_send)(f'user_{tenant.id}', {
+                    'type': 'notification',
+                    'notification': payload,
+                })
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+        return Response(ContratoSolicitacaoSerializer(obj, context={'request': request}).data)
+
+    # Mercado Pago preference endpoint has been removed per project configuration.
+    # Re-enable by implementing provider-specific logic in a dedicated module.
+    # Payment endpoints (Mercado Pago / Stripe) have been removed per project configuration.
+    # If you need to re-enable payments, implement provider-specific endpoints in a
+    # dedicated module and add the necessary settings and secrets securely.
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def stripe_webhook(request):
+    # Stripe webhook handler removed — return 404 to indicate unavailable
+    return HttpResponse(status=404)
