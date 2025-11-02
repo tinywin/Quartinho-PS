@@ -30,3 +30,7 @@ http://127.0.0.1:8000/admin/
 *necessario um login de administrador. no terminal, o comando:
 $python manage.py createsuperuser
 (inserir email não é obrigatório)
+
+## Observação sobre pagamentos
+
+As integrações com provedores de pagamento (por exemplo Stripe ou Mercado Pago) foram removidas deste repositório. Se você quiser reativar pagamentos, adicione endpoints dedicados no backend, assegure o armazenamento seguro das chaves (variáveis de ambiente) e atualize o client mobile conforme necessário.

@@ -5,6 +5,16 @@ Adaptado para Django + Channels + Flutter LAN/WebSocket.
 import redis
 from pathlib import Path
 import os
+try:
+    # Load .env from backend/.env for local development if present (optional)
+    # This makes it convenient to keep secrets out of the repository while
+    # allowing a developer to create a local backend/.env file with keys.
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(Path(__file__).resolve().parent.parent, '.env'))
+except Exception:
+    # python-dotenv is optional; if not installed the environment will still
+    # be read from the real environment variables.
+    pass
 from datetime import timedelta
 
 # Caminho base do projeto
@@ -144,6 +154,21 @@ SIMPLE_JWT = {
 # 🔥 Firebase (opcional, desativado por padrão)
 FIREBASE_CREDENTIALS = None
 FIREBASE_CREDENTIALS_JSON = None
+
+# Payment provider keys removed (Mercado Pago / Stripe) — configure providers separately if needed.
+# Stripe settings have been removed from this deployment. Configure payment
+# providers in a dedicated integration module if needed.
+
+# Mercado Pago access token (optional). Configure in environment for local/dev if you use Mercado Pago.
+MERCADO_PAGO_ACCESS_TOKEN = os.getenv('MERCADO_PAGO_ACCESS_TOKEN', None)
+# Frontend URL used to build success/cancel URLs for hosted pages (adjust if your frontend runs elsewhere)
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+
+# Secret token that can be used by external payment webhooks to authorize
+# server-to-server requests that should mark payments as confirmed. If set,
+# a webhook can POST to the dedicated confirm_payment action with {'secret': ...}
+# to update the contract payment status. Keep this secret out of source control.
+PAYMENT_WEBHOOK_SECRET = os.getenv('PAYMENT_WEBHOOK_SECRET', None)
 
 # 🧠 Autenticação customizada
 AUTHENTICATION_BACKENDS = [

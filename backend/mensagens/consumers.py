@@ -105,6 +105,13 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def chat_message(self, event):
         await self.send_json({'type': 'message', 'message': event['message']})
 
+    async def notification(self, event):
+        # Forward notification events sent to the user's group to the websocket client
+        try:
+            await self.send_json({'type': 'notification', 'notification': event.get('notification')})
+        except Exception:
+            pass
+
     @database_sync_to_async
     def create_message(self, sender_id, recipient_id, text, message_type='text', data=None):
         from .models import Message, Conversation

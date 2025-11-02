@@ -11,8 +11,14 @@ class ContratoSolicitacaoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ContratoSolicitacao
-        fields = ['id', 'imovel', 'solicitante', 'nome_completo', 'cpf', 'telefone', 'comprovante', 'contrato_final', 'contrato_assinado', 'status', 'resposta_do_proprietario', 'data_criacao', 'data_atualizacao']
-        read_only_fields = ['id', 'solicitante', 'status', 'data_criacao', 'data_atualizacao']
+        fields = [
+            'id', 'imovel', 'solicitante', 'nome_completo', 'cpf', 'telefone',
+            'comprovante', 'contrato_final', 'contrato_assinado', 'status',
+            'resposta_do_proprietario', 'data_criacao', 'data_atualizacao',
+            # payment tracking
+            'primeiro_aluguel_pago', 'mp_payment_id', 'mp_payment_status',
+        ]
+        read_only_fields = ['id', 'solicitante', 'status', 'data_criacao', 'data_atualizacao', 'primeiro_aluguel_pago', 'mp_payment_id', 'mp_payment_status']
 
     def create(self, validated_data):
         request = self.context.get('request')

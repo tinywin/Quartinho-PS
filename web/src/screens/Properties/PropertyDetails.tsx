@@ -252,6 +252,42 @@ const PropertyDetails = (): JSX.Element => {
               </div>
             </div>
           )}
+          {/* Action buttons below owner info (Eu quero! / Entrar em contato) */}
+              <div className="mt-3 flex gap-3">
+                {(() => {
+                  const dono = property.dono || property.proprietario;
+                  const ownerEmail = dono?.email || dono?.username || null;
+                  const handleExpressInterest = () => {
+                    // navigate to the request form so the user can submit name/cpf/phone and upload comprovante
+                    if (property && property.id) {
+                      navigate(`/properties/${property.id}/request`);
+                    } else if (id) {
+                      navigate(`/properties/${id}/request`);
+                    } else {
+                      window.alert('Imóvel não identificado.');
+                    }
+                  };
+
+                  const handleContact = () => {
+                    if (ownerEmail && ownerEmail.includes('@')) {
+                      window.location.href = `mailto:${ownerEmail}`;
+                    } else {
+                      window.alert('Contato: email do proprietário não disponível.');
+                    }
+                  };
+
+                  return (
+                    <>
+                      <button onClick={handleExpressInterest} className="flex-1 px-4 py-2 rounded-full border border-purple-400 text-purple-700 bg-white hover:bg-purple-50">
+                        Eu quero!
+                      </button>
+                      <button onClick={handleContact} className="flex-1 px-4 py-2 rounded-full bg-purple-600 text-white hover:brightness-105">
+                        Entrar em contato
+                      </button>
+                    </>
+                  );
+                })()}
+              </div>
 
           {/* Address */}
           {(property.endereco || property.cidade) && (

@@ -534,6 +534,12 @@ const fetchUnreadCount = async () => {
                     Perfil
                   </button>
                   <button
+                    onClick={() => { setShowUserMenu(false); navigate('/contratos'); }}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                  >
+                    Contratos
+                  </button>
+                  <button
                     onClick={() => { setShowUserMenu(false); clearAuth(); navigate('/email-login'); }}
                     className="w-full text-left px-4 py-2 hover:bg-gray-100"
                   >

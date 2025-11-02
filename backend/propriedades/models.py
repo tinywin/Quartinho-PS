@@ -75,6 +75,10 @@ class ContratoSolicitacao(models.Model):
     contrato_assinado = models.FileField(upload_to='contratos/assinados/', blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     resposta_do_proprietario = models.TextField(blank=True, null=True)
+    # Payment tracking (Primeiro Aluguel)
+    primeiro_aluguel_pago = models.BooleanField(default=False)
+    mp_payment_id = models.CharField(max_length=128, blank=True, null=True)
+    mp_payment_status = models.CharField(max_length=64, blank=True, null=True)
     data_criacao = models.DateTimeField(auto_now_add=True)
     data_atualizacao = models.DateTimeField(auto_now=True)
 

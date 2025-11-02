@@ -3,6 +3,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from propriedades import views as propriedades_views
 
 urlpatterns = [
     # Admin
@@ -26,6 +27,7 @@ urlpatterns = [
 
     # Endpoints do app mensagens
     path('mensagens/', include('mensagens.urls')),
+    # Stripe webhook endpoint removed
 ]
 
 # Configuração para servir arquivos de mídia durante o desenvolvimento
