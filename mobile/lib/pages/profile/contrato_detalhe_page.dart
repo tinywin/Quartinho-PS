@@ -391,7 +391,37 @@ class _ContratoDetalhePageState extends State<ContratoDetalhePage> {
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_data!['imovel'] != null ? (_data!['imovel']['titulo'] ?? 'Imóvel') : 'Imóvel', style: GoogleFonts.lato(fontSize: 18, fontWeight: FontWeight.bold)),
+                      // Title row with status badge on the right (matches web UI)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(_data!['imovel'] != null ? (_data!['imovel']['titulo'] ?? 'Imóvel') : 'Imóvel', style: GoogleFonts.lato(fontSize: 18, fontWeight: FontWeight.bold)),
+                          ),
+                          const SizedBox(width: 8),
+                          // status badge
+                          Builder(builder: (ctx) {
+                            final status = (_data!['status'] ?? 'pending').toString();
+                            Color bg = const Color(0xFFFFFBEB); // yellow-100 fallback
+                            Color fg = const Color(0xFF92400E);
+                            if (status == 'approved' || status == 'paid') {
+                              bg = const Color(0xFFDCFCE7); // green-100
+                              fg = const Color(0xFF065F46); // green-800
+                            } else if (status == 'pending') {
+                              bg = const Color(0xFFFEF3C7);
+                              fg = const Color(0xFF92400E);
+                            } else {
+                              bg = const Color(0xFFFEE2E2);
+                              fg = const Color(0xFF991B1B);
+                            }
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(16)),
+                              child: Text(status, style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.w600)),
+                            );
+                          }),
+                        ],
+                      ),
                       const SizedBox(height: 8),
                       Text('Solicitante: ${_data!['solicitante'] != null ? (_data!['solicitante']['nome_completo'] ?? _data!['solicitante']['username']) : (_data!['nome_completo'] ?? '')}'),
                       const SizedBox(height: 8),
@@ -402,7 +432,7 @@ class _ContratoDetalhePageState extends State<ContratoDetalhePage> {
                         Text('Comprovante enviado pelo solicitante:', style: const TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         Card(
-                          color: const Color(0xFFF7F7FB),
+                          color: kPaletteSoft,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           child: ListTile(
                             leading: const Icon(Icons.picture_as_pdf, size: 28),
@@ -437,7 +467,7 @@ class _ContratoDetalhePageState extends State<ContratoDetalhePage> {
                         Text('Contrato final anexado:', style: const TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         Card(
-                          color: const Color(0xFFF7F7FB),
+                          color: kPaletteSoft,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           child: ListTile(
                             leading: const Icon(Icons.description, size: 28),
@@ -470,7 +500,7 @@ class _ContratoDetalhePageState extends State<ContratoDetalhePage> {
                         Text('Contrato assinado (enviado pelo solicitante):', style: const TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         Card(
-                          color: const Color(0xFFF7F7FB),
+                          color: kPaletteSoft,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           child: ListTile(
                             leading: const Icon(Icons.how_to_reg, size: 28),
@@ -497,14 +527,25 @@ class _ContratoDetalhePageState extends State<ContratoDetalhePage> {
                           ),
                         ),
                         //const SizedBox(height: 12),
-                        // Primeiro Aluguel button: show immediately below the signed contract only for the solicitante
-                        // (double-check the solicitante id to ensure the current user is the one who requested the contract)
-                        if (_isSolicitante && (_data!['solicitante'] is Map ? (_data!['solicitante']['id'] == _currentUserId) : true)) ...[
-                          ElevatedButton.icon(
-                            onPressed: _paying ? null : _pagarPrimeiroAluguel,
-                            icon: _paying ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.monetization_on),
-                            label: _paying ? const Text('Processando...') : const Text('Primeiro Aluguel'),
+                        // If owner and first rent paid, show a confirmation line (matches web UI)
+                        if (_isOwner && (_data!['primeiro_aluguel_pago'] == true || (_data!['status'] ?? '') == 'paid')) ...[
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6.0),
+                            child: Text(
+                              'Pagamento confirmado (simulado)',
+                              style: TextStyle(color: const Color(0xFF065F46), fontWeight: FontWeight.w600),
+                            ),
                           ),
+                        ],
+                        // Primeiro Aluguel button: show immediately below the signed contract only for the solicitante
+                        // and only if not already paid
+                        if (_isSolicitante && (_data!['solicitante'] is Map ? (_data!['solicitante']['id'] == _currentUserId) : true) && !((_data!['primeiro_aluguel_pago'] == true) || ((_data!['status'] ?? '') == 'paid'))) ...[
+                          ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(backgroundColor: kPalettePrimary),
+                              onPressed: _paying ? null : _pagarPrimeiroAluguel,
+                              icon: _paying ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.monetization_on),
+                              label: _paying ? const Text('Processando...') : const Text('Primeiro Aluguel'),
+                            ),
                           //const SizedBox(height: 12),
                         ],
                       ],
@@ -519,7 +560,7 @@ class _ContratoDetalhePageState extends State<ContratoDetalhePage> {
                             spacing: 12,
                             runSpacing: 8,
                             children: [
-                              ElevatedButton.icon(onPressed: _showPickOptions, icon: const Icon(Icons.attach_file), label: const Text('Escolher arquivo')),
+                              ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: kPalettePrimary), onPressed: _showPickOptions, icon: const Icon(Icons.attach_file), label: const Text('Escolher arquivo')),
                               if (_pickedFile != null)
                                 ConstrainedBox(
                                   constraints: BoxConstraints(maxWidth: (constraints.maxWidth - 160).clamp(80, constraints.maxWidth)),
@@ -529,9 +570,9 @@ class _ContratoDetalhePageState extends State<ContratoDetalhePage> {
                           ),
                         ),
                         //const SizedBox(height: 12),
-                        _loading
-                            ? const Center(child: CircularProgressIndicator())
-                            : ElevatedButton(onPressed: _pickedFile == null ? null : _upload, child: const Text('Enviar contrato')),
+            _loading
+              ? const Center(child: CircularProgressIndicator())
+              : ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: kPalettePrimary), onPressed: _pickedFile == null ? null : _upload, child: const Text('Enviar contrato')),
                       ] else if (_isSolicitante) ...[
                         // Solicitante: can view/download contrato_final and upload contrato_assinado
                         if (_data!['contrato_final'] != null) ...[
@@ -550,7 +591,7 @@ class _ContratoDetalhePageState extends State<ContratoDetalhePage> {
                             spacing: 12,
                             runSpacing: 8,
                             children: [
-                              ElevatedButton.icon(onPressed: _showPickOptionsAssinado, icon: const Icon(Icons.attach_file), label: const Text('Escolher arquivo')),
+                              ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: kPalettePrimary), onPressed: _showPickOptionsAssinado, icon: const Icon(Icons.attach_file), label: const Text('Escolher arquivo')),
                               if (_pickedFileSigned != null)
                                 ConstrainedBox(
                                   constraints: BoxConstraints(maxWidth: (constraints.maxWidth - 160).clamp(80, constraints.maxWidth)),
@@ -560,9 +601,9 @@ class _ContratoDetalhePageState extends State<ContratoDetalhePage> {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        _loading
-                            ? const Center(child: CircularProgressIndicator())
-                            : ElevatedButton(onPressed: _pickedFileSigned == null ? null : _uploadAssinado, child: const Text('Enviar contrato assinado')),
+            _loading
+              ? const Center(child: CircularProgressIndicator())
+              : ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: kPalettePrimary), onPressed: _pickedFileSigned == null ? null : _uploadAssinado, child: const Text('Enviar contrato assinado')),
                       ],
                       const SizedBox(height: 12),
                     ],
@@ -652,6 +693,7 @@ class _ComprovantePreviewState extends State<_ComprovantePreview> {
           SelectableText(url, textAlign: TextAlign.center),
           const SizedBox(height: 12),
           ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: kPalettePrimary),
             icon: const Icon(Icons.copy),
             label: const Text('Copiar link'),
             onPressed: () {
@@ -661,18 +703,21 @@ class _ComprovantePreviewState extends State<_ComprovantePreview> {
           ),
           const SizedBox(height: 8),
           ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: kPalettePrimary),
             icon: const Icon(Icons.open_in_new),
             label: const Text('Abrir no navegador'),
             onPressed: () => UrlLauncherService.openUrlExternal(context, url),
           ),
           const SizedBox(height: 8),
           ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: kPalettePrimary),
             icon: const Icon(Icons.open_in_new_outlined),
             label: const Text('Abrir (baixar e abrir)'),
             onPressed: () => DownloadService.downloadAndOpen(context, url),
           ),
           const SizedBox(height: 8),
           ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: kPalettePrimary),
             icon: const Icon(Icons.download_rounded),
             label: const Text('Baixar'),
             onPressed: () => UrlLauncherService.openUrlExternal(context, url),

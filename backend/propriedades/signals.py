@@ -19,6 +19,7 @@ def contratos_pre_save(sender, instance, **kwargs):
         instance._old_contrato_final = False
         instance._old_contrato_assinado = False
         instance._old_comprovante = False
+        instance._old_primeiro_aluguel_pago = False
         return
     try:
         old = ContratoSolicitacao.objects.get(pk=instance.pk)
@@ -26,11 +27,13 @@ def contratos_pre_save(sender, instance, **kwargs):
         instance._old_contrato_final = bool(old.contrato_final)
         instance._old_contrato_assinado = bool(old.contrato_assinado)
         instance._old_comprovante = bool(old.comprovante)
+        instance._old_primeiro_aluguel_pago = bool(old.primeiro_aluguel_pago)
     except ContratoSolicitacao.DoesNotExist:
         instance._old_status = None
         instance._old_contrato_final = False
         instance._old_contrato_assinado = False
         instance._old_comprovante = False
+        instance._old_primeiro_aluguel_pago = False
 
 
 @receiver(post_save, sender=ContratoSolicitacao)
@@ -124,6 +127,16 @@ def contratos_post_save(sender, instance, created, **kwargs):
             notify(owner, msg, imovel=instance.imovel, data={'type': 'contrato', 'contrato_id': instance.id, 'event': 'comprovante'}, title='Comprovante enviado')
         except Exception:
             logger.exception('Error notifying owner about comprovante')
+
+    # primeiro_aluguel_pago changed -> notify owner
+    old_paid = getattr(instance, '_old_primeiro_aluguel_pago', False)
+    if not old_paid and bool(instance.primeiro_aluguel_pago):
+        try:
+            owner = instance.imovel.proprietario
+            msg = f'O solicitante pagou o primeiro aluguel para a solicitação #{instance.id}.'
+            notify(owner, msg, imovel=instance.imovel, data={'type': 'contrato', 'contrato_id': instance.id, 'event': 'primeiro_aluguel_pago'}, title='Pagamento recebido')
+        except Exception:
+            logger.exception('Error notifying owner about primeiro_aluguel_pago')
 # Em propriedades/signals.py (CRIE ESTE ARQUIVO)
 
 from django.db.models.signals import pre_save

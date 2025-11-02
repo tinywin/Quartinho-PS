@@ -435,6 +435,13 @@ class ContratoSolicitacaoViewSet(viewsets.ModelViewSet):
             v = bool(v)
 
         obj.primeiro_aluguel_pago = v
+        # If payment confirmed, mark contract status as 'paid' for clarity
+        if v:
+            try:
+                # only set if the choice exists (we added 'paid' to STATUS_CHOICES)
+                obj.status = 'paid'
+            except Exception:
+                pass
         obj.save()
 
         # notify proprietário and solicitante
