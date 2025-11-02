@@ -62,6 +62,7 @@ class ContratoSolicitacao(models.Model):
         ('pending', 'Pendente'),
         ('approved', 'Aprovado'),
         ('rejected', 'Rejeitado'),
+        ('paid', 'Pago'),
     ]
 
     imovel = models.ForeignKey(Propriedade, related_name='contratos', on_delete=models.CASCADE)

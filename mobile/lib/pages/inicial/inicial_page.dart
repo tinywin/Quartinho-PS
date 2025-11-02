@@ -1008,6 +1008,54 @@ class _MeuAnuncioCard extends StatelessWidget {
               ),
             ),
 
+            const SizedBox(height: 8),
+            // linha de características (quando disponíveis)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Builder(builder: (ctx) {
+                int? beds;
+                int? baths;
+                bool wifi = false;
+                try {
+                  final q = dados['quartos'] ?? dados['dormitorios'] ?? dados['quarto'] ?? dados['rooms'];
+                  if (q != null) beds = q is int ? q : int.tryParse(q.toString());
+                } catch (_) {}
+                try {
+                  final b = dados['banheiros'] ?? dados['banheiro'] ?? dados['bathrooms'];
+                  if (b != null) baths = b is int ? b : int.tryParse(b.toString());
+                } catch (_) {}
+                try {
+                  final w = dados['wifi'] ?? dados['has_wifi'] ?? dados['tem_wifi'];
+                  if (w != null) {
+                    if (w is bool) wifi = w;
+                    else if (w is String) wifi = w.toLowerCase() == 'true';
+                  }
+                } catch (_) {}
+
+                return Row(
+                  children: [
+                    if (beds != null) ...[
+                      const Icon(Icons.bed_outlined, size: 16),
+                      const SizedBox(width: 6),
+                      Text('${beds}', style: GoogleFonts.poppins(fontSize: 12)),
+                      const SizedBox(width: 12),
+                    ],
+                    if (baths != null) ...[
+                      const Icon(Icons.bathtub_outlined, size: 16),
+                      const SizedBox(width: 6),
+                      Text('${baths}', style: GoogleFonts.poppins(fontSize: 12)),
+                      const SizedBox(width: 12),
+                    ],
+                    if (wifi) ...[
+                      const Icon(Icons.wifi, size: 16),
+                      const SizedBox(width: 6),
+                      Text('Wi‑Fi', style: GoogleFonts.poppins(fontSize: 12)),
+                    ],
+                  ],
+                );
+              }),
+            ),
+
             const SizedBox(height: 12),
           ],
         ),
@@ -1199,9 +1247,30 @@ class _SugestoesGrid extends StatelessWidget {
           final title = m['titulo']?.toString() ?? '';
           final preco = m['preco']?.toString() ?? m['preco_total']?.toString() ?? '';
 
-          return StatefulBuilder(
+                  return StatefulBuilder(
             builder: (ctx, setSt) {
               bool fav = m['favorito'] == true;
+
+              // tenta extrair características comuns quando presentes
+              int? beds;
+              int? baths;
+              bool wifi = false;
+              try {
+                final q = m['quartos'] ?? m['dormitorios'] ?? m['quarto'] ?? m['rooms'];
+                if (q != null) beds = q is int ? q : int.tryParse(q.toString());
+              } catch (_) {}
+              try {
+                final b = m['banheiros'] ?? m['banheiro'] ?? m['bathrooms'];
+                if (b != null) baths = b is int ? b : int.tryParse(b.toString());
+              } catch (_) {}
+              try {
+                final w = m['wifi'] ?? m['has_wifi'] ?? m['tem_wifi'];
+                if (w != null) {
+                  if (w is bool) wifi = w;
+                  else if (w is String) wifi = w.toLowerCase() == 'true';
+                }
+              } catch (_) {}
+
               return GestureDetector(
                 onTap: () {
                   Navigator.push(
@@ -1218,6 +1287,9 @@ class _SugestoesGrid extends StatelessWidget {
                     price: preco.isEmpty ? '-' : 'R\$ $preco',
                     rating: (m['rating'] is num) ? (m['rating'] as num).toDouble() : double.tryParse((m['rating'] ?? '').toString()) ?? 0.0,
                     distance: '-',
+                    beds: beds,
+                    baths: baths,
+                    hasWifi: wifi,
                   ),
                   favorito: fav,
                   onToggleFavorite: () async {
@@ -1251,6 +1323,9 @@ class _Property {
   final double rating;
   final String distance;
   final String? tag;
+  final int? beds;
+  final int? baths;
+  final bool hasWifi;
 
   const _Property({
     required this.title,
@@ -1259,6 +1334,9 @@ class _Property {
     required this.rating,
     required this.distance,
     this.tag,
+    this.beds,
+    this.baths,
+    this.hasWifi = false,
   });
 }
 
@@ -1273,103 +1351,149 @@ class _PropertyCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF000000).withValues(alpha: .05),
-            blurRadius: 10,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: .06),
+            blurRadius: 12,
+            offset: const Offset(0, 8),
           )
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(22),
-                  topRight: Radius.circular(22),
+          // imagem com badges (nota e preço)
+          ClipRRect(
+            borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+            child: Stack(
+              children: [
+                SizedBox(
+                  height: 140,
+                  width: double.infinity,
+                  child: item.image.isEmpty
+                      ? _placeholderBox(height: 140)
+                      : Image.network(
+                          item.image,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _placeholderBox(height: 140),
+                        ),
                 ),
-                child: item.image.isEmpty
-                    ? _placeholderBox(height: 130)
-                    : Image.network(
-                        item.image,
-                        height: 130,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _placeholderBox(height: 130),
-                      ),
-              ),
-              Positioned(
-                left: 10,
-                bottom: 10,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFF8A34),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    item.price,
-                    style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                right: 10,
-                top: 10,
-                child: InkWell(
-                  onTap: onToggleFavorite,
-                  customBorder: const CircleBorder(),
+                // rating badge (top-right)
+                Positioned(
+                  right: 10,
+                  top: 10,
                   child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.95),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withValues(alpha: .04), blurRadius: 6, offset: const Offset(0, 3)),
+                      ],
                     ),
-                    child: Icon(
-                      favorito ? Icons.favorite : Icons.favorite_border,
-                      size: 18,
-                      color: favorito ? Colors.redAccent : Colors.black,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.star, size: 14, color: Color(0xFFFFC107)),
+                        const SizedBox(width: 6),
+                        Text(item.rating.toStringAsFixed(1), style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700)),
+                      ],
                     ),
                   ),
                 ),
-              ),
-            ],
+                // price badge (bottom-left)
+                Positioned(
+                  left: 10,
+                  bottom: 10,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF8A34),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      item.price,
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+                // favorite
+                Positioned(
+                  right: 10,
+                  bottom: 10,
+                  child: InkWell(
+                    onTap: onToggleFavorite,
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        favorito ? Icons.favorite : Icons.favorite_border,
+                        size: 18,
+                        color: favorito ? Colors.redAccent : Colors.black,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
+
+          // conteúdo textual
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
             child: Text(
               item.title,
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
               ),
             ),
           ),
-          const SizedBox(height: 6),
+
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              item.distance,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[700], fontWeight: FontWeight.w500),
+            ),
+          ),
+
+          const SizedBox(height: 8),
+          // linha de características (quartos / banheiros / wifi)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: Row(
               children: [
-                const Icon(Icons.star, size: 16, color: Color(0xFFFFC107)),
-                const SizedBox(width: 4),
-                Text(
-                  item.rating.toStringAsFixed(1),
-                  style: GoogleFonts.poppins(fontSize: 12),
-                ),
-                const SizedBox(width: 10),
-                const Icon(Icons.location_on_outlined, size: 16),
-                const SizedBox(width: 2),
-                Text(item.distance, style: GoogleFonts.poppins(fontSize: 12)),
+                if (item.beds != null) ...[
+                  const Icon(Icons.bed_outlined, size: 16),
+                  const SizedBox(width: 6),
+                  Text('${item.beds}', style: GoogleFonts.poppins(fontSize: 12)),
+                  const SizedBox(width: 12),
+                ],
+                if (item.baths != null) ...[
+                  const Icon(Icons.bathtub_outlined, size: 16),
+                  const SizedBox(width: 6),
+                  Text('${item.baths}', style: GoogleFonts.poppins(fontSize: 12)),
+                  const SizedBox(width: 12),
+                ],
+                if (item.hasWifi) ...[
+                  const Icon(Icons.wifi, size: 16),
+                  const SizedBox(width: 6),
+                  Text('Wi‑Fi', style: GoogleFonts.poppins(fontSize: 12)),
+                ],
+                const Spacer(),
               ],
             ),
           ),

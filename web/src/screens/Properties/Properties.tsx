@@ -78,15 +78,20 @@ export const Properties = (): JSX.Element => {
     const ud = getUserData();
     setCurrentUserId(ud?.id ?? null);
     setCurrentUser(ud ?? null);
-    fetchProperties();
+    // buscar apenas os IDs de favoritos no mount
     fetchFavorites();
+  // apenas na montagem
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  if (onlyFavorites) {
+  // busca propriedades quando filtros/flags mudam
+  useEffect(() => {
+    if (onlyFavorites) {
       fetchFavoriteProperties();
     } else {
       fetchProperties();
     }
-
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, onlyMine, onlyFavorites]);
 
   // fetch current user from backend to ensure we have the latest profile (including avatar url)
@@ -301,6 +306,18 @@ const fetchUnreadCount = async () => {
     setFilters(prev => ({ ...prev, q: searchTerm, cidade: "" }));
   };
 
+  // debounce searchTerm -> update filters after a short delay to avoid too many requests
+  const searchTimeout = useRef<number | null>(null);
+  useEffect(() => {
+    if (searchTimeout.current) window.clearTimeout(searchTimeout.current);
+    searchTimeout.current = window.setTimeout(() => {
+      setFilters(prev => ({ ...prev, q: searchTerm }));
+    }, 350);
+    return () => {
+      if (searchTimeout.current) window.clearTimeout(searchTimeout.current);
+    };
+  }, [searchTerm]);
+
   const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
   };
@@ -330,7 +347,14 @@ const fetchUnreadCount = async () => {
 
   const getPropertyImage = (property: Property) => {
     const principalPhoto = property.fotos?.find(foto => foto.principal);
-    return principalPhoto?.imagem || property.fotos?.[0]?.imagem || '/placeholder-property.jpg';
+    const raw = principalPhoto?.imagem || property.fotos?.[0]?.imagem || '/placeholder-property.jpg';
+    if (typeof raw !== 'string') return '/placeholder-property.jpg';
+    // absolute URLs or data URIs
+    if (/^https?:\/\//i.test(raw) || raw.startsWith('data:')) return raw;
+    // relative paths from backend start with /
+    if (raw.startsWith('/')) return `${API_BASE_URL.replace(/\/$/, '')}${raw}`;
+    // otherwise prefix with API base
+    return `${API_BASE_URL.replace(/\/$/, '')}/${raw}`;
   };
 
   const fetchFavorites = async () => {
@@ -661,11 +685,13 @@ const fetchUnreadCount = async () => {
                   <img
                     src={getPropertyImage(property)}
                     alt={property.titulo}
+                    loading="lazy"
                     className="w-full h-full object-cover"
                   />
 
                   <button 
                       onClick={() => handleToggleFavorite(property.id)}
+                      aria-label={`Favoritar ${property.titulo}`}
                       className="absolute top-3 right-3 p-2 bg-white rounded-full shadow-md hover:bg-gray-50"
                     >
                       <Heart 
@@ -677,7 +703,7 @@ const fetchUnreadCount = async () => {
                       />
                     </button>
 
-                  <div className="absolute bottom-3 left-3 bg-white px-2 py-1 rounded-md text-sm font-medium">
+                    <div className="absolute bottom-3 left-3 bg-white px-2 py-1 rounded-md text-sm font-medium">
                     {property.tipo}
                   </div>
                 </div>

@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
 
 // Permite sobrescrever o host via --dart-define=BACKEND_HOST=http://...
 const String _hostDefine = String.fromEnvironment('BACKEND_HOST', defaultValue: '');
@@ -38,3 +39,8 @@ const String googleMapsApiKey = 'PUT_YOUR_GOOGLE_MAPS_API_KEY_HERE';
 // OAuth client IDs (mobile)
 // Use the Web OAuth Client ID to obtain idToken via google_sign_in
 const String googleWebClientId = 'COLOQUE_SUA_WEB_CLIENT_ID_DO_GOOGLE_AQUI';
+
+// App color palette used across the mobile app (payment / contract highlights)
+const Color kPalettePrimary = Color(0xFF9A36F6); // purple
+const Color kPaletteAccent = Color(0xFFF97316); // orange
+const Color kPaletteSoft = Color(0xFFFCE7F3); // pink-light
