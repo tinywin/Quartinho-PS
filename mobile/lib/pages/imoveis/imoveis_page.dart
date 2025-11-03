@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:mobile/core/constants.dart';
+import 'package:mobile/core/services/favorites_service.dart';
+import 'package:mobile/core/utils/property_utils.dart';
 import 'package:mobile/pages/imoveis/widgets/header_imo.dart';
 import 'package:mobile/pages/imoveis/widgets/search_imoveis.dart';
 import 'package:mobile/pages/imoveis/widgets/imovel_card.dart';
@@ -82,7 +84,8 @@ class _ImoveisPageState extends State<ImoveisPage> {
         final data = json.decode(utf8.decode(resp.bodyBytes));
         if (!mounted) return;
         setState(() {
-          imoveis = (data is List) ? data : <dynamic>[];
+          // normalize items so UI consumes consistent shape
+          imoveis = (data is List) ? (data.map((e) => normalizeProperty(e)).toList()) : <dynamic>[];
           loading = false;
         });
       } else {
@@ -148,8 +151,9 @@ class _ImoveisPageState extends State<ImoveisPage> {
 
     if (mounted) Navigator.of(context).pop(); // fecha loading
 
-    if (det != null) {
-      envio = det; // agora tem cidade, estado, cep, descricao, varandas, area, tags, booleans etc.
+      if (det != null) {
+        // normalize the detailed object so downstream UI (detail page) consumes a consistent shape
+        envio = normalizeProperty(det);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Não foi possível carregar os detalhes. Mostrando resumo.')),
@@ -254,9 +258,8 @@ class _ImoveisPageState extends State<ImoveisPage> {
                           final precoStr = (preco != null) ? 'R\$ $preco' : '-';
                           final titulo = (imovel['titulo'] ?? '').toString();
 
-                          // mocks (substitua se vier do backend)
-                          final rating = 4.8 + (index % 3) * 0.1;
-                          final distancia = index % 2 == 0 ? '200 m' : '1.5 km';
+                          final rating = (imovel['rating'] is num) ? (imovel['rating'] as num).toDouble() : double.tryParse((imovel['rating'] ?? '').toString()) ?? 0.0;
+                          final distancia = imovel['distance']?.toString() ?? (index % 2 == 0 ? '200 m' : '1.5 km');
 
                           return GestureDetector(
                             onTap: () => _abrirDetalhe(imovel),
@@ -266,7 +269,21 @@ class _ImoveisPageState extends State<ImoveisPage> {
                               preco: precoStr,
                               rating: rating,
                               distancia: distancia,
-                              favorito: false,
+                              favorito: imovel['favorito'] == true,
+                              onToggleFavorite: () async {
+                                final id = imovel['id'];
+                                if (id == null) return;
+                                final int pid = id is int
+                                    ? id
+                                    : (id is String ? int.tryParse(id) ?? -1 : -1);
+                                if (pid < 0) return;
+                                final res = await FavoritesService.toggleFavorite(pid, token: widget.token);
+                                if (res != null && mounted) {
+                                  setState(() {
+                                    imovel['favorito'] = res;
+                                  });
+                                }
+                              },
                             ),
                           );
                         },

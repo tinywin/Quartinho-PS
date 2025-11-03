@@ -3,13 +3,20 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "../../components/ui/button";
 import { useState } from "react";
 import axios from "axios";
+import { API_BASE_URL } from "../../utils/apiConfig";
+import { loginWithGoogle, loginWithFacebook } from "../../utils/socialAuth";
 
 export const EmailLogin = (): JSX.Element => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState<{ google: boolean; facebook: boolean }>({ google: false, facebook: false });
   const navigate = useNavigate();
+  
+  // Avisos de configuração: variáveis de ambiente do Vite
+  const isGoogleConfigured = !!((import.meta as any).env?.VITE_GOOGLE_CLIENT_ID);
+  const isFacebookConfigured = !!((import.meta as any).env?.VITE_FACEBOOK_APP_ID);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,7 +25,7 @@ export const EmailLogin = (): JSX.Element => {
 
     try {
       // Fazer requisição para o endpoint de login
-      const response = await axios.post("http://localhost:8000/usuarios/login/", {
+      const response = await axios.post(`${API_BASE_URL}/usuarios/login/`, {
         email,
         password
       });
@@ -54,30 +61,77 @@ export const EmailLogin = (): JSX.Element => {
         throw new Error("Access token não encontrado");
       }
 
-      // Salvar tokens no localStorage
+      // Salvar tokens no localStorage (chaves novas e antigas para compatibilidade)
+      localStorage.setItem("accessToken", tokens.access);
+      localStorage.setItem("refreshToken", tokens.refresh || "");
+      localStorage.setItem("userData", JSON.stringify(user));
       localStorage.setItem("access_token", tokens.access);
-      localStorage.setItem("refresh_token", tokens.refresh);
+      localStorage.setItem("refresh_token", tokens.refresh || "");
       localStorage.setItem("user_data", JSON.stringify(user));
 
-      console.log("Login realizado com sucesso, redirecionando...");
-
-      // Sempre redirecionar para user-preference após login bem-sucedido
       navigate("/user-preference");
     } catch (err: any) {
-      console.error("Erro ao fazer login:", err);
-      if (err.response) {
-        console.error("Dados da resposta de erro:", err.response.data);
-        console.error("Status da resposta:", err.response.status);
-      }
-      
-      // Verificar se há non_field_errors (erro de credenciais inválidas)
-      if (err.response?.data?.non_field_errors) {
-        setError("Email ou senha incorretos");
+      console.error("Erro no login:", err);
+      // Tratamento de erros amigáveis ao usuário
+      // DRF costuma retornar 400 com {"non_field_errors": ["..."]} ou campos específicos
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status;
+        const data = err.response?.data as any;
+        if (status === 400 && data) {
+          // Extrai a melhor mensagem possível
+          const nonField = Array.isArray(data?.non_field_errors) ? data.non_field_errors[0] : undefined;
+          const emailMsg = Array.isArray(data?.email) ? data.email[0] : (typeof data?.email === 'string' ? data.email : undefined);
+          const senhaMsg = Array.isArray(data?.password) ? data.password[0] : (typeof data?.password === 'string' ? data.password : undefined);
+          const mensagemDireta = typeof data === 'string' ? data : undefined;
+
+          const friendly =
+            nonField ||
+            emailMsg ||
+            senhaMsg ||
+            mensagemDireta ||
+            "E-mail ou senha inválidos. Verifique seus dados e tente novamente.";
+
+          setError(friendly);
+        } else if (status === 401) {
+          setError("Credenciais inválidas. Verifique seu e-mail e senha.");
+        } else if (status === 403) {
+          setError("Acesso negado. Verifique suas credenciais e tente novamente.");
+        } else {
+          setError("Não foi possível realizar o login. Tente novamente.");
+        }
       } else {
-        setError(err.response?.data?.detail || err.message || "Erro ao fazer login. Verifique suas credenciais.");
+        setError(err?.message || "Falha no login");
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogle = async () => {
+    setError("");
+    setSocialLoading((s) => ({ ...s, google: true }));
+    try {
+      await loginWithGoogle();
+      navigate("/user-preference");
+    } catch (e: any) {
+      console.error("Erro no login Google:", e);
+      setError(e?.message || "Falha no login com Google");
+    } finally {
+      setSocialLoading((s) => ({ ...s, google: false }));
+    }
+  };
+
+  const handleFacebook = async () => {
+    setError("");
+    setSocialLoading((s) => ({ ...s, facebook: true }));
+    try {
+      await loginWithFacebook();
+      navigate("/user-preference");
+    } catch (e: any) {
+      console.error("Erro no login Facebook:", e);
+      setError(e?.message || "Falha no login com Facebook");
+    } finally {
+      setSocialLoading((s) => ({ ...s, facebook: false }));
     }
   };
 
@@ -160,29 +214,49 @@ export const EmailLogin = (): JSX.Element => {
               Ou continue com suas redes sociais
             </p>
             
+            {/* Painel de aviso de configuração */}
+            {(!isGoogleConfigured || !isFacebookConfigured) && (
+              <div className="bg-yellow-50 text-yellow-700 p-3 rounded-lg text-sm mb-4 text-left">
+                <p className="font-medium mb-1">Configuração necessária para login social:</p>
+                {!isGoogleConfigured && (
+                  <p className="mb-1">• Defina <code>VITE_GOOGLE_CLIENT_ID</code> em <code>web/.env</code>:<br />
+                  Exemplo: <code>VITE_GOOGLE_CLIENT_ID=SEU_CLIENT_ID_DO_GOOGLE</code></p>
+                )}
+                {!isFacebookConfigured && (
+                  <p>• Defina <code>VITE_FACEBOOK_APP_ID</code> em <code>web/.env</code>:<br />
+                  Exemplo: <code>VITE_FACEBOOK_APP_ID=SEU_APP_ID_DO_FACEBOOK</code></p>
+                )}
+                <p className="mt-2">Após configurar, reinicie o servidor com <code>npm run dev</code>.</p>
+              </div>
+            )}
+            
             <div className="flex gap-4">
               <Button
+                onClick={handleGoogle}
                 variant="secondary"
                 className="flex-1 h-12 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors duration-200"
+                disabled={socialLoading.google || !isGoogleConfigured}
               >
                 <img
                   className="w-5 h-5 mr-2"
                   alt="Google"
                   src="/logo---google---normal.png"
                 />
-                <span className="text-sm font-medium">Google</span>
+                <span className="text-sm font-medium">{socialLoading.google ? 'Conectando...' : 'Google'}</span>
               </Button>
               
               <Button
+                onClick={handleFacebook}
                 variant="secondary"
                 className="flex-1 h-12 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors duration-200"
+                disabled={socialLoading.facebook || !isFacebookConfigured}
               >
                 <img
                   className="w-5 h-5 mr-2"
                   alt="Facebook"
                   src="/logo---facebook---normal.png"
                 />
-                <span className="text-sm font-medium">Facebook</span>
+                <span className="text-sm font-medium">{socialLoading.facebook ? 'Conectando...' : 'Facebook'}</span>
               </Button>
             </div>
           </div>

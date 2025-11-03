@@ -4,6 +4,7 @@ import 'package:mobile/core/services/auth_service.dart';
 import '../../core/constants.dart';
 import 'package:mobile/pages/login/login_home_page.dart';
 import 'package:mobile/pages/profile/edit_profile_page.dart';
+import 'package:mobile/pages/profile/preference_switch_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -121,6 +122,43 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
                   ),
                   const SizedBox(height: 24),
+                  // Informações adicionais
+                  if ((user?['telefone'] ?? '').toString().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        'Telefone: ${(user!['telefone']).toString()}',
+                        style: GoogleFonts.lato(
+                          fontSize: 14,
+                          color: const Color(0xFF23235B).withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ),
+                  Builder(
+                    builder: (ctx) {
+                      final dn = (user?['data_nascimento'] ?? '').toString();
+                      String formatted = '';
+                      if (dn.isNotEmpty) {
+                        try {
+                          final d = DateTime.parse(dn);
+                          formatted = '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+                        } catch (_) {}
+                      }
+                      return formatted.isEmpty
+                          ? const SizedBox.shrink()
+                          : Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(
+                                'Data de nascimento: $formatted',
+                                style: GoogleFonts.lato(
+                                  fontSize: 14,
+                                  color: const Color(0xFF23235B).withValues(alpha: 0.7),
+                                ),
+                              ),
+                            );
+                    },
+                  ),
+                  const SizedBox(height: 8),
                   ListTile(
                     leading: const Icon(Icons.person_outline),
                     title: const Text('Editar perfil'),
@@ -138,7 +176,12 @@ class _ProfilePageState extends State<ProfilePage> {
                   ListTile(
                     leading: const Icon(Icons.settings_outlined),
                     title: const Text('Configurações'),
-                    onTap: () {},
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const PreferenceSwitchPage()),
+                      );
+                    },
                   ),
                   const Spacer(),
                   SizedBox(

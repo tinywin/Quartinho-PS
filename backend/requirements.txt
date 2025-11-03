@@ -2,4 +2,11 @@ Django==5.0.4
 djangorestframework==3.15.1
 djangorestframework-simplejwt==5.3.1
 django-cors-headers==4.4.0
-Pillow==10.4.0
+# Pillow 10.x doesn't have Windows wheels for Python 3.14; upgrade to 11.x which supports it
+Pillow==11.0.0
+channels==4.0.0
+daphne==4.0.0
+firebase-admin==6.0.0
+# mercadopago and stripe removed as payment providers have been disabled
+python-dotenv==1.0.0
+mercadopago==2.0.0

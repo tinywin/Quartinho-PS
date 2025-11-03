@@ -5,12 +5,14 @@ from django.contrib.auth import authenticate
 
 class UsuarioSerializer(serializers.ModelSerializer):
     nome_completo = serializers.CharField(source='username')  # mapeia username
+    nome = serializers.CharField(source='username', read_only=True)  # Alias para compatibilidade com Flutter
     password = serializers.CharField(write_only=True)
     avatar = serializers.ImageField(read_only=True)
+    foto_perfil = serializers.ImageField(source='avatar', read_only=True)  # Alias para Flutter
     
     class Meta:
         model = Usuario
-        fields = ['id', 'nome_completo', 'data_nascimento', 'cpf', 'email', 'avatar', 'password']
+        fields = ['id', 'nome_completo', 'nome', 'data_nascimento', 'cpf', 'email', 'avatar', 'foto_perfil', 'telefone', 'password']
         read_only_fields = ['id']
 
     def create(self, validated_data):

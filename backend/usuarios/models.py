@@ -37,6 +37,7 @@ class Usuario(AbstractBaseUser, PermissionsMixin):
     cpf = models.CharField(max_length=14, unique=True, null=True, blank=True, validators=[validar_cpf])
     data_nascimento = models.DateField(null=True, blank=True)
     preference = models.CharField(max_length=20, choices=PREFERENCE_CHOICES, null=True, blank=True)
+    telefone = models.CharField(max_length=50, null=True, blank=True)
 
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)

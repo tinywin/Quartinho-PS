@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./src/App.tsx";
+import ErrorBoundary from "./src/components/ErrorBoundary";
 
 // One-time reset of browser storage and caches to simulate first run
 (function resetOnce() {
@@ -36,6 +37,8 @@ import App from "./src/App.tsx";
 
 createRoot(document.getElementById("app") as HTMLElement).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 );

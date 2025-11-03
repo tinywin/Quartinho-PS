@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, MapPin, Heart, Star, Bed, Bath, Car, Wifi } from "lucide-react";
+import { Search, MapPin, Heart, Star, Bed, Bath, Car, Wifi, Bell, X } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import axios from "axios";
 import { API_BASE_URL, getAuthHeaders } from "../../utils/apiConfig";
@@ -28,9 +28,25 @@ interface Property {
     imagem: string;
     principal: boolean;
   }>;
+  // possible rating fields returned by API
+  nota_media?: number;
+  rating?: number;
+  avg_rating?: number;
+  media?: number;
+}
+
+interface Notification {
+  id: number;
+  mensagem: string;
+  lida: boolean;
+  data_criacao: string;
+  imovel?: number; // ID do imóvel
 }
 
 export const Properties = (): JSX.Element => {
+  // debug: confirmar montagem do componente
+  // eslint-disable-next-line no-console
+  console.log('[DEBUG] Properties mounted');
   const navigate = useNavigate();
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,24 +61,116 @@ export const Properties = (): JSX.Element => {
   });
   const [onlyMine, setOnlyMine] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
-
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const notificationMenuRef = useRef<HTMLDivElement | null>(null);
 
 
   useEffect(() => {
     const ud = getUserData();
     setCurrentUserId(ud?.id ?? null);
-    fetchProperties();
+    setCurrentUser(ud ?? null);
+    // buscar apenas os IDs de favoritos no mount
     fetchFavorites();
+  // apenas na montagem
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  if (onlyFavorites) {
+  // busca propriedades quando filtros/flags mudam
+  useEffect(() => {
+    if (onlyFavorites) {
       fetchFavoriteProperties();
     } else {
       fetchProperties();
     }
-
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, onlyMine, onlyFavorites]);
+
+  // fetch current user from backend to ensure we have the latest profile (including avatar url)
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/usuarios/me/`, { headers: getAuthHeaders() });
+        const data = res.data;
+        if (data) {
+          setCurrentUser(data);
+          setCurrentUserId(data.id ?? currentUserId);
+          setAvatarError(false);
+        }
+      } catch (err) {
+        // ignore: if unauthenticated or endpoint not present, fallback to local stored user
+        // eslint-disable-next-line no-console
+        console.debug('Could not fetch current user profile', err);
+      }
+    };
+
+    fetchCurrentUser();
+    fetchUnreadCount();
+    // only run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // close menu when clicking outside
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (!showUserMenu) return;
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false);
+      }
+      if (notificationMenuRef.current && !notificationMenuRef.current.contains(e.target as Node)) {
+        setShowNotifications(false);
+      }      
+    };
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
+  }, [showUserMenu, showNotifications]);
+
+  const getUserAvatar = (u: any) => {
+    if (!u) return null;
+    // possible shapes: string URL, relative path, object with url property
+    const raw = u.avatar ?? u.avatar_url ?? u.foto ?? u.avatarUrl ?? u.picture ?? u.image ?? null;
+    if (!raw) return null;
+
+    // If avatar is object like { url: '...' } or { imagem: '...' }
+    if (typeof raw === 'object') {
+      const r = raw.url ?? raw.url_imagem ?? raw.imagem ?? raw.path ?? raw.filename ?? null;
+      if (typeof r === 'string') {
+        if (/^https?:\/\//i.test(r) || r.startsWith('data:')) return r;
+        if (r.startsWith('/')) return `${API_BASE_URL.replace(/\/$/, '')}${r}`;
+        return r;
+      }
+      return null;
+    }
+
+    // If it's a string
+    if (typeof raw === 'string') {
+      // already absolute
+      if (/^https?:\/\//i.test(raw) || raw.startsWith('data:')) return raw;
+      // relative path from backend (starts with /media or /)
+      if (raw.startsWith('/')) return `${API_BASE_URL.replace(/\/$/, '')}${raw}`;
+      // otherwise return as-is
+      return raw;
+    }
+
+    return null;
+  };
+
+  const getUserInitials = (u: any) => {
+    if (!u) return '';
+    const name = u.nome || u.name || u.full_name || u.first_name || u.username || '';
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
 
   const fetchProperties = async () => {
     try {
@@ -78,7 +186,24 @@ export const Properties = (): JSX.Element => {
         headers: getAuthHeaders(),
         params: onlyMine ? undefined : cleanParams,
       });
-      setProperties(response.data);
+
+      // Normaliza diferentes formatos de resposta (array direto ou paginação DRF)
+      const data = response.data;
+      let items: Property[] = [];
+      if (Array.isArray(data)) {
+        items = data;
+      } else if (data && Array.isArray(data.results)) {
+        items = data.results;
+      } else if (data && Array.isArray(data.data)) {
+        items = data.data;
+      } else {
+        // Se não for nenhum dos formatos esperados, loga para facilitar debug
+        // eslint-disable-next-line no-console
+        console.warn('[Properties] resposta da API inesperada ao buscar propriedades:', data);
+        items = [];
+      }
+
+      setProperties(items);
     } catch (error) {
       console.error("Erro ao buscar propriedades:", error);
       setError("Não foi possível carregar as propriedades. Tente novamente.");
@@ -87,9 +212,148 @@ export const Properties = (): JSX.Element => {
     }
   };
 
+const fetchUnreadCount = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/notificacoes/contagem_nao_lida/`, {
+        headers: getAuthHeaders(),
+      });
+      setUnreadCount(response.data.count || 0);
+    } catch (error) {
+      console.error("Erro ao buscar contagem de notificações:", error);
+    }
+  };
+
+  /**
+   * Busca a lista completa de notificações.
+   */
+  const fetchNotifications = async () => {
+    setLoadingNotifications(true);
+    try {
+      const response = await axios.get(`${API_BASE_URL}/notificacoes/`, {
+        headers: getAuthHeaders(),
+      });
+      // A API retorna a lista direto ou dentro de 'results'
+      const data = response.data;
+      if (Array.isArray(data)) {
+        setNotifications(data);
+      } else if (data && Array.isArray(data.results)) {
+        setNotifications(data.results);
+      }
+    } catch (error) {
+      console.error("Erro ao buscar notificações:", error);
+    } finally {
+      setLoadingNotifications(false);
+    }
+  };
+
+  /**
+   * Marca todas as notificações como lidas no backend.
+   */
+  const markAllAsRead = async () => {
+    try {
+      await axios.post(
+        `${API_BASE_URL}/notificacoes/marcar_todas_como_lidas/`,
+        {},
+        { headers: getAuthHeaders() }
+      );
+      // Atualiza o estado local
+      setUnreadCount(0);
+      setNotifications((prev) => prev.map(n => ({ ...n, lida: true })));
+    } catch (error) {
+      console.error("Erro ao marcar notificações como lidas:", error);
+    }
+  };
+
+  /**
+   * Ação de clique no ícone de sino.
+   */
+  const handleBellClick = () => {
+    // Fecha o outro menu se estiver aberto
+    setShowUserMenu(false);
+    
+    // Se está fechando o menu, não faz nada
+    if (showNotifications) {
+      setShowNotifications(false);
+      return;
+    }
+
+    // Se está abrindo o menu
+    setShowNotifications(true);
+    fetchNotifications(); // Busca a lista
+    
+    // Se tinha notificações não lidas, marca todas como lidas
+    if (unreadCount > 0) {
+      markAllAsRead();
+    }
+  };
+
+  /**
+   * Helper para formatar a data da notificação.
+   */
+  const formatNotificationDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date);
+  };
+
+const handleDeleteNotification = async (e: React.MouseEvent, notificationId: number) => {
+    e.stopPropagation(); 
+    
+    const notificationToRemove = notifications.find(n => n.id === notificationId);
+    setNotifications(prev => prev.filter(n => n.id !== notificationId));
+    
+    if (notificationToRemove && !notificationToRemove.lida) {
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    }
+
+    try {
+      await axios.delete(`${API_BASE_URL}/notificacoes/${notificationId}/`, {
+        headers: getAuthHeaders(),
+      });
+    } catch (error) {
+      console.error("Erro ao excluir notificação:", error);
+      fetchNotifications();
+      fetchUnreadCount();
+    }
+  };
+
+  const handleDeleteAllNotifications = async () => {
+    // Atualização Otimista
+    setNotifications([]);
+    setUnreadCount(0);
+    
+    try {
+      await axios.delete(
+        `${API_BASE_URL}/notificacoes/excluir_todas/`,
+        { headers: getAuthHeaders() }
+      );
+    } catch (error) {
+      console.error("Erro ao excluir todas as notificações:", error);
+      fetchNotifications();
+      fetchUnreadCount();
+    }
+  };  
+
   const handleSearch = () => {
     setFilters(prev => ({ ...prev, q: searchTerm, cidade: "" }));
   };
+
+  // debounce searchTerm -> update filters after a short delay to avoid too many requests
+  const searchTimeout = useRef<number | null>(null);
+  useEffect(() => {
+    if (searchTimeout.current) window.clearTimeout(searchTimeout.current);
+    searchTimeout.current = window.setTimeout(() => {
+      setFilters(prev => ({ ...prev, q: searchTerm }));
+    }, 350);
+    return () => {
+      if (searchTimeout.current) window.clearTimeout(searchTimeout.current);
+    };
+  }, [searchTerm]);
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -102,9 +366,32 @@ export const Properties = (): JSX.Element => {
     }).format(price);
   };
 
+  const getPropertyRating = (p: Property) => {
+    // try common fields from API
+    const raw = (p as any).nota_media ?? (p as any).avg_rating ?? (p as any).rating ?? (p as any).nota ?? (p as any).media ?? null;
+    if (raw != null) {
+      const n = Number(raw);
+      if (!Number.isNaN(n)) return n;
+    }
+    // fallback: if the property embedded comments exist, compute average
+    const comments = (p as any).comentarios ?? (p as any).comentarios_list ?? null;
+    if (Array.isArray(comments) && comments.length > 0) {
+      const notes = comments.map((c: any) => Number(c.nota ?? c.rating ?? 0)).filter((v: number) => v > 0);
+      if (notes.length > 0) return notes.reduce((a: number, b: number) => a + b, 0) / notes.length;
+    }
+    return null;
+  };
+
   const getPropertyImage = (property: Property) => {
     const principalPhoto = property.fotos?.find(foto => foto.principal);
-    return principalPhoto?.imagem || property.fotos?.[0]?.imagem || '/placeholder-property.jpg';
+    const raw = principalPhoto?.imagem || property.fotos?.[0]?.imagem || '/placeholder-property.jpg';
+    if (typeof raw !== 'string') return '/placeholder-property.jpg';
+    // absolute URLs or data URIs
+    if (/^https?:\/\//i.test(raw) || raw.startsWith('data:')) return raw;
+    // relative paths from backend start with /
+    if (raw.startsWith('/')) return `${API_BASE_URL.replace(/\/$/, '')}${raw}`;
+    // otherwise prefix with API base
+    return `${API_BASE_URL.replace(/\/$/, '')}/${raw}`;
   };
 
   const fetchFavorites = async () => {
@@ -112,7 +399,15 @@ export const Properties = (): JSX.Element => {
       const response = await axios.get(`${API_BASE_URL}/propriedades/favoritos/`, {
         headers: getAuthHeaders(),
       });
-      const ids = response.data.map((prop: Property) => prop.id);
+      const data = response.data;
+      let items: Property[] = [];
+      if (Array.isArray(data)) {
+        items = data;
+      } else if (data && Array.isArray(data.results)) {
+        items = data.results;
+      }
+
+      const ids = items.map((prop: Property) => prop.id);
       setFavoriteIds(new Set(ids));
     } catch (error) {
       console.error("Erro ao buscar IDs de favoritos:", error);
@@ -125,7 +420,14 @@ export const Properties = (): JSX.Element => {
       const response = await axios.get(`${API_BASE_URL}/propriedades/favoritos/`, {
         headers: getAuthHeaders(),
       });
-      setProperties(response.data);
+      const data = response.data;
+      let items: Property[] = [];
+      if (Array.isArray(data)) {
+        items = data;
+      } else if (data && Array.isArray(data.results)) {
+        items = data.results;
+      }
+      setProperties(items);
     } catch (error) {
       console.error("Erro ao buscar propriedades favoritas:", error);
       setError("Não foi possível carregar seus favoritos.");
@@ -203,13 +505,123 @@ export const Properties = (): JSX.Element => {
               </Button>
 
             <div className="ml-auto" />
-            <Button
-              variant="secondary"
-              onClick={() => { clearAuth(); navigate('/email-login'); }}
-              className="px-4"
-            >
-              Logout
-            </Button>
+
+<div ref={notificationMenuRef} className="relative">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleBellClick(); }}
+                className="p-2 rounded-full text-gray-600 hover:bg-gray-100 focus:outline-none relative"
+                aria-label="Notificações"
+              >
+                <Bell className="w-6 h-6" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-0 right-0 block h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-bold ring-2 ring-white">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Dropdown de Notificações */}
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 md:w-96 bg-white border rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
+                  <div className="flex justify-between items-center p-4 border-b">
+                    <h3 className="text-lg font-semibold text-gray-900">Notificações</h3>
+                    {notifications.length > 0 && (
+                      <button
+                        onClick={handleDeleteAllNotifications} // Chama a nova função
+                        className="text-sm font-medium text-orange-600 hover:text-orange-800 hover:underline"
+                      >
+                        Limpar Tudo
+                      </button>
+                    )}
+                  </div>
+                  {loadingNotifications ? (
+                    <div className="p-6 text-center text-gray-500">
+                      Carregando...
+                    </div>
+                  ) : notifications.length === 0 ? (
+                    <div className="p-6 text-center text-gray-500">
+                      Nenhuma notificação ainda.
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {notifications.map((notif) => (
+                        <div key={notif.id} className={`p-4 hover:bg-gray-50 relative group cursor-pointer ${!notif.lida ? 'bg-white' : 'bg-orange-50'}`}
+                        onClick={() => {
+                            if (notif.imovel) {
+                              navigate(`/properties/${notif.imovel}`);
+                              setShowNotifications(false);
+                            }
+                          }}                        
+                        >
+                          <p className="text-sm text-gray-700">
+                            {notif.mensagem}
+                          </p>
+                          <span className="text-xs text-gray-500 mt-1 block">
+                            {formatNotificationDate(notif.data_criacao)}
+                          </span>
+                          <button
+                            onClick={(e) => handleDeleteNotification(e, notif.id)}
+                            className="absolute top-2 right-2 p-1 rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                            aria-label="Excluir notificação"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>            
+
+            <div ref={userMenuRef} className="relative">
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowUserMenu((v) => !v); setShowNotifications(false) }}
+                className="flex items-center focus:outline-none"
+              >
+                {(() => {
+                  const avatar = getUserAvatar(currentUser);
+                  if (avatar && !avatarError) {
+                    return (
+                      <img
+                        src={avatar}
+                        alt={currentUser?.nome || 'Usuário'}
+                        onError={() => setAvatarError(true)}
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+                    );
+                  }
+                  return (
+                    <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-sm font-medium text-gray-700">
+                      {getUserInitials(currentUser) || 'U'}
+                    </div>
+                  );
+                })()}
+              </button>
+
+              {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-white border rounded shadow z-50">
+                  <button
+                    onClick={() => { setShowUserMenu(false); navigate('/profile'); }}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                  >
+                    Perfil
+                  </button>
+                  <button
+                    onClick={() => { setShowUserMenu(false); navigate('/contratos'); }}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                  >
+                    Contratos
+                  </button>
+                  <button
+                    onClick={() => { setShowUserMenu(false); clearAuth(); navigate('/email-login'); }}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                  >
+                    Sair
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
           
           {/* Search Bar */}
@@ -323,11 +735,13 @@ export const Properties = (): JSX.Element => {
                   <img
                     src={getPropertyImage(property)}
                     alt={property.titulo}
+                    loading="lazy"
                     className="w-full h-full object-cover"
                   />
 
                   <button 
                       onClick={() => handleToggleFavorite(property.id)}
+                      aria-label={`Favoritar ${property.titulo}`}
                       className="absolute top-3 right-3 p-2 bg-white rounded-full shadow-md hover:bg-gray-50"
                     >
                       <Heart 
@@ -339,7 +753,7 @@ export const Properties = (): JSX.Element => {
                       />
                     </button>
 
-                  <div className="absolute bottom-3 left-3 bg-white px-2 py-1 rounded-md text-sm font-medium">
+                    <div className="absolute bottom-3 left-3 bg-white px-2 py-1 rounded-md text-sm font-medium">
                     {property.tipo}
                   </div>
                 </div>
@@ -351,8 +765,15 @@ export const Properties = (): JSX.Element => {
                       {property.titulo}
                     </h3>
                     <div className="flex items-center">
-                      <Star className="w-4 h-4 text-yellow-400 fill-current" />
-                      <span className="text-sm text-gray-600 ml-1">4.8</span>
+                        {(() => {
+                          const r = getPropertyRating(property);
+                          return (
+                            <>
+                              <Star className={`w-4 h-4 ${r ? 'text-yellow-400' : 'text-gray-300'}`} />
+                              <span className="text-sm text-gray-600 ml-1">{r ? r.toFixed(1) : '—'}</span>
+                            </>
+                          );
+                        })()}
                     </div>
                   </div>
 
@@ -439,7 +860,7 @@ export const Properties = (): JSX.Element => {
                       </span>
                       <span className="text-gray-600 text-sm">/mês</span>
                     </div>
-                    <Button className="bg-orange-500 hover:bg-orange-600">
+                    <Button className="bg-orange-500 hover:bg-orange-600" onClick={() => navigate(`/properties/${property.id}`)}>
                       Ver detalhes
                     </Button>
                   </div>

@@ -3,6 +3,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile/pages/signup/widgets/buttom_back.dart';
 import 'package:mobile/pages/imoveis/widgets/dono_imovel_perfil.dart';
 import '../../core/constants.dart';
+import 'comentarios_section.dart';
+import 'map_preview.dart';
+import '../../core/services/favorites_service.dart';
+import '../../core/services/auth_service.dart';
+// import 'contrato_aluguel_page.dart';
+import 'chat_page.dart';
+import 'contrato_aluguel_page.dart';
 
 class ImovelDetalhePage extends StatelessWidget {
   final Map imovel;
@@ -91,7 +98,7 @@ class ImovelDetalhePage extends StatelessWidget {
                     'R\$ ${(imovel['preco_total'] ?? imovel['preco'] ?? '-').toString()} / mês',
                     style: GoogleFonts.lato(fontSize: 20, color: const Color(0xFFCBACFF), fontWeight: FontWeight.bold),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
 
                   // Descrição
                   if (imovel['descricao'] != null && (imovel['descricao'].toString().isNotEmpty))
@@ -117,6 +124,46 @@ class ImovelDetalhePage extends StatelessWidget {
                     const SizedBox(height: 18),
                     Text('Proprietário: ${imovel['dono'] ?? imovel['proprietario']}'),
                   ],
+
+                  // Ações principais conforme Figma: "Eu quero!" e "Entrar em contato"
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFF6E56CF)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          onPressed: () {
+                            // Navega para o fluxo de contrato de aluguel, passando o imóvel atual
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => ContratoAluguelPage(imovel: imovel)));
+                          },
+                          child: Text('Eu quero!', style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.bold, color: const Color(0xFF6E56CF))),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6E56CF),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          onPressed: () {
+                            final owner = (imovel['proprietario'] ?? imovel['dono']) as Map?;
+                            final ownerId = owner != null ? (owner['id'] is int ? owner['id'] as int : int.tryParse(owner['id']?.toString() ?? '')) : null;
+                            final ownerName = owner != null ? (owner['nome'] ?? owner['nome_completo'] ?? owner['username'] ?? 'Proprietário').toString() : 'Proprietário';
+                            if (ownerId != null) {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => ChatPage(ownerId: ownerId, ownerName: ownerName)));
+                            }
+                          },
+                          child: Text('Entrar em contato', style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                        ),
+                      ),
+                    ],
+                  ),
 
                   const SizedBox(height: 24),
 
@@ -209,8 +256,59 @@ class ImovelDetalhePage extends StatelessWidget {
                           .toList(),
                     ),
                   ],
+                  const SizedBox(height: 20),
+
+                  // Preview do mapa (static image)
+                  if ((imovel['latitude'] != null && imovel['longitude'] != null) ||
+                      (imovel['endereco'] != null && imovel['endereco'].toString().isNotEmpty)) ...[
+                    const SizedBox(height: 8),
+                    MapPreview(
+                      latitude: imovel['latitude'] != null
+                          ? double.tryParse(imovel['latitude'].toString())
+                          : null,
+                      longitude: imovel['longitude'] != null
+                          ? double.tryParse(imovel['longitude'].toString())
+                          : null,
+                      address: imovel['endereco'] != null ? imovel['endereco'].toString() : null,
+                      height: 160,
+                    ),
+                  ],
                 ],
               ),
+            ),
+
+                  // Favoritar / coração no topo direito do bloco de informações
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FutureBuilder<String?>(
+                      future: AuthService.getSavedToken(),
+                      builder: (ctx, snap) {
+                        final token = snap.data;
+                        return IconButton(
+                          onPressed: token == null
+                              ? null
+                              : () async {
+                                  final id = imovel['id'];
+                                  if (id == null) return;
+                                  final res = await FavoritesService.toggleFavorite(id as int, token: token);
+                                  if (res != null) {
+                                    imovel['favorito'] = res;
+                                    (ctx as Element).markNeedsBuild();
+                                  }
+                                },
+                          icon: Icon(
+                            imovel['favorito'] == true ? Icons.favorite : Icons.favorite_border,
+                            color: imovel['favorito'] == true ? Colors.redAccent : Colors.grey[600],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+            // Comentários
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: ComentariosSection(imovelId: imovel['id']),
             ),
           ],
         ),
@@ -218,6 +316,8 @@ class ImovelDetalhePage extends StatelessWidget {
     );
   }
 }
+
+
 
 class _InfoChip extends StatelessWidget {
   final String label;

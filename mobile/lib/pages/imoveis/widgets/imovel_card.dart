@@ -8,6 +8,7 @@ class ImovelCard extends StatelessWidget {
   final String? distancia;
   final double? rating;
   final bool favorito;
+  final VoidCallback? onToggleFavorite;
 
   const ImovelCard({
     super.key,
@@ -17,6 +18,7 @@ class ImovelCard extends StatelessWidget {
     this.distancia,
     this.rating,
     this.favorito = false,
+    this.onToggleFavorite,
   });
 
   @override
@@ -56,20 +58,25 @@ class ImovelCard extends StatelessWidget {
                 Positioned(
                   top: 12,
                   right: 12,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.08),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      favorito ? Icons.favorite : Icons.favorite_border,
-                      color: favorito ? Colors.pink : Colors.grey,
+                  child: InkWell(
+                    onTap: onToggleFavorite,
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.all(6),
+                      child: Icon(
+                        favorito ? Icons.favorite : Icons.favorite_border,
+                        color: favorito ? Colors.pink : Colors.grey,
+                      ),
                     ),
                   ),
                 ),

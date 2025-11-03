@@ -9,6 +9,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile/pages/inicial/inicial_page.dart';
 import 'package:mobile/pages/login/login.dart';
+import 'package:http/http.dart' as http;
+import 'package:mobile/core/services/auth_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ExtraSignUpPage extends StatefulWidget {
   final String name;
@@ -43,6 +46,45 @@ class _ExtraSignUpPageState extends State<ExtraSignUpPage> {
     if (picked != null) {
       final bytes = await picked.readAsBytes();
       setState(() => _avatarBytes = bytes);
+    }
+  }
+
+  Future<bool> _persistExtras() async {
+    final token = await AuthService.getSavedToken();
+    if (token == null) return false;
+
+    final uri = Uri.parse('${AuthService.baseUrl}/usuarios/me/');
+    try {
+      if (_avatarBytes != null) {
+        final req = http.MultipartRequest('PATCH', uri);
+        req.headers['Authorization'] = 'Bearer $token';
+        req.files.add(http.MultipartFile.fromBytes(
+          'avatar',
+          _avatarBytes!,
+          filename: 'avatar.jpg',
+        ));
+        final phone = _phoneCtrl.text.trim();
+        if (phone.isNotEmpty) {
+          // Backend atual pode ignorar este campo se não suportado
+          req.fields['telefone'] = phone;
+        }
+        final resp = await req.send();
+        return resp.statusCode >= 200 && resp.statusCode < 300;
+      } else {
+        final phone = _phoneCtrl.text.trim();
+        if (phone.isEmpty) return true; // nada a persistir
+        final resp = await http.patch(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: '{"telefone":"$phone"}',
+        );
+        return resp.statusCode >= 200 && resp.statusCode < 300;
+      }
+    } catch (_) {
+      return false;
     }
   }
 
@@ -135,12 +177,18 @@ class _ExtraSignUpPageState extends State<ExtraSignUpPage> {
                     ),
                     onPressed: _submitting
                         ? null
-                        : () {
+                        : () async {
                             if (_formKey.currentState!.validate()) {
                               setState(() => _submitting = true);
-                              _showSuccessBottomSheet(context).whenComplete(
-                                () => setState(() => _submitting = false),
-                              );
+                              final ok = await _persistExtras();
+                              if (!mounted) return;
+                              if (!ok) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Falha ao salvar perfil. Tente novamente.')),
+                                );
+                              }
+                              await _showSuccessBottomSheet(context);
+                              if (mounted) setState(() => _submitting = false);
                             }
                           },
                     child: Text(
@@ -218,7 +266,15 @@ class _ExtraSignUpPageState extends State<ExtraSignUpPage> {
                       backgroundColor: const Color(0xFFFF8533),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
                     ),
-                    onPressed: () {
+                    onPressed: () async {
+                      await AuthService.setProfileCompleted(widget.email);
+                      // Persistir região/cidade escolhida caso exista
+                      try {
+                        if ((widget.city ?? '').trim().isNotEmpty) {
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setString('user_region', widget.city!.trim());
+                        }
+                      } catch (_) {}
                       Navigator.pushAndRemoveUntil(
                         context,
                         MaterialPageRoute(
@@ -242,9 +298,10 @@ class _ExtraSignUpPageState extends State<ExtraSignUpPage> {
       },
     );
   }
+
+  // ----- widgets auxiliares (iguais aos seus atuais) -----
 }
 
-// ----- widgets auxiliares (iguais aos seus atuais) -----
 class _ReadonlyField extends StatelessWidget {
   final String value;
   final IconData icon;

@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 from usuarios.models import Usuario
 
 class Propriedade(models.Model):
@@ -39,3 +40,51 @@ class FotoPropriedade(models.Model):
     
     def __str__(self):
         return f"Foto de {self.propriedade.titulo}"
+
+
+class Comentario(models.Model):
+    imovel = models.ForeignKey(Propriedade, related_name='comentarios', on_delete=models.CASCADE)
+    autor = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='comentarios', on_delete=models.CASCADE)
+    texto = models.TextField()
+    nota = models.IntegerField(null=True, blank=True, default=0)
+    data_criacao = models.DateTimeField(auto_now_add=True)
+    data_atualizacao = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-data_criacao']
+
+    def __str__(self):
+        return f"Comentario {self.id} em {self.imovel.titulo} por {self.autor}"
+
+
+class ContratoSolicitacao(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pendente'),
+        ('approved', 'Aprovado'),
+        ('rejected', 'Rejeitado'),
+        ('paid', 'Pago'),
+    ]
+
+    imovel = models.ForeignKey(Propriedade, related_name='contratos', on_delete=models.CASCADE)
+    solicitante = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='contratos_solicitados', on_delete=models.CASCADE)
+    nome_completo = models.CharField(max_length=200)
+    cpf = models.CharField(max_length=20)
+    telefone = models.CharField(max_length=50, blank=True, null=True)
+    comprovante = models.FileField(upload_to='contratos/', blank=True, null=True)
+    contrato_final = models.FileField(upload_to='contratos/finais/', blank=True, null=True)
+    # contrato assinado pelo solicitante (após proprietário anexar o contrato final)
+    contrato_assinado = models.FileField(upload_to='contratos/assinados/', blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    resposta_do_proprietario = models.TextField(blank=True, null=True)
+    # Payment tracking (Primeiro Aluguel)
+    primeiro_aluguel_pago = models.BooleanField(default=False)
+    mp_payment_id = models.CharField(max_length=128, blank=True, null=True)
+    mp_payment_status = models.CharField(max_length=64, blank=True, null=True)
+    data_criacao = models.DateTimeField(auto_now_add=True)
+    data_atualizacao = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-data_criacao']
+
+    def __str__(self):
+        return f"Contrato #{self.id} - {self.imovel.titulo} por {self.solicitante} ({self.status})"

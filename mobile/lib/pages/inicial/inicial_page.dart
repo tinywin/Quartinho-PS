@@ -17,9 +17,17 @@ import '../imoveis/imovel_detalhe_page.dart';
 import 'package:mobile/pages/imoveis/search_results_page.dart';
 
 import '../../core/services/auth_service.dart';
+import 'package:mobile/pages/profile/preference_switch_page.dart';
 import '../../core/constants.dart';
+import '../../core/utils/property_utils.dart';
 import 'package:mobile/pages/profile/profile_page.dart';
+import 'package:mobile/pages/profile/contratos_page.dart';
 import 'package:mobile/pages/login/login_home_page.dart';
+import 'package:mobile/pages/inicial/favorites_page.dart';
+import 'package:mobile/core/services/favorites_service.dart';
+import 'package:mobile/pages/notificacoes/notificacoes_mensagens_page.dart';
+import 'package:mobile/core/services/notification_service.dart';
+// import duplicado removido
 
 class InicialPage extends StatefulWidget {
   final String name; // nome completo do usuário
@@ -45,6 +53,8 @@ class _InicialPageState extends State<InicialPage> {
   int _navIndex = 0;
   String? _avatarUrl;
   int? _myUserId;
+  String? _userPreference; // 'room' ou 'roommate'
+  int _notificationCount = 0;
 
   /// lista dinâmica com os imóveis criados pelo usuário logado
   final List<Map<String, dynamic>> _meusAnuncios = [];
@@ -53,6 +63,8 @@ class _InicialPageState extends State<InicialPage> {
   final List<Map<String, dynamic>> _sugestoes = [];
 
   bool _loadingSugestoes = false;
+  // Temporariamente desativa blocos de localização e pesquisa na Home
+  final bool _showLocationAndSearch = false;
 
   // Primeiro nome para o header ("Oi, ...!")
   String get _firstName {
@@ -63,11 +75,7 @@ class _InicialPageState extends State<InicialPage> {
     return first.isEmpty ? 'usuário' : first[0].toUpperCase() + first.substring(1);
   }
 
-  TextStyle get _h2 => GoogleFonts.poppins(
-        fontSize: 16,
-        fontWeight: FontWeight.w600,
-        color: const Color(0xFF1B1D28),
-      );
+  // header text style (kept inline where used)
 
   Future<void> _abrirCriarImovel() async {
     final novo = await Navigator.push<Map<String, dynamic>?>(
@@ -112,6 +120,8 @@ class _InicialPageState extends State<InicialPage> {
       _loadMinhasPropriedades(),
     ]);
     await _loadSugestoes();
+    // Carrega contagem inicial de notificações não lidas
+    await _loadNotificationCount();
   }
 
   Future<void> _doRefresh() async {
@@ -156,7 +166,10 @@ class _InicialPageState extends State<InicialPage> {
       }
 
       // id do usuário
-      _myUserId = _tryParseUserId(me as Map<String, dynamic>?);
+  _myUserId = _tryParseUserId(me);
+
+      // preferência do usuário (para habilitar/desabilitar cadastro de imóvel)
+      _userPreference = me?['preference']?.toString();
 
       setState(() {});
     } catch (_) {}
@@ -291,52 +304,7 @@ class _InicialPageState extends State<InicialPage> {
     }
   }
 
-  /// Normaliza um item vindo do backend para o formato esperado pela grade de sugestões
-  Map<String, dynamic> _normalizeSugestao(Map raw) {
-    final m = Map<String, dynamic>.from(raw);
-    // título, preço e imagens
-    final titulo = (m['titulo'] ?? '').toString();
-    final preco = (m['preco'] ?? m['preco_total'] ?? '').toString();
-
-    // fotos: aceitamos "fotos" [{imagem: "..."}] ou "fotos_paths" ["/path", ...]
-    List<Map<String, String>> fotos = [];
-    final rawFotos = m['fotos'];
-    if (rawFotos is List) {
-      for (final f in rawFotos) {
-        if (f is Map && f['imagem'] != null) {
-          String s = f['imagem'].toString();
-          if (!s.startsWith('http')) {
-            if (!s.startsWith('/')) s = '/$s';
-            s = '$backendHost$s';
-          }
-          fotos.add({'imagem': s});
-        } else if (f is String) {
-          String s = f;
-          if (!s.startsWith('http')) {
-            if (!s.startsWith('/')) s = '/$s';
-            s = '$backendHost$s';
-          }
-          fotos.add({'imagem': s});
-        }
-      }
-    } else if (m['fotos_paths'] is List) {
-      for (final f in (m['fotos_paths'] as List)) {
-        String s = f.toString();
-        if (!s.startsWith('http')) {
-          if (!s.startsWith('/')) s = '/$s';
-          s = '$backendHost$s';
-        }
-        fotos.add({'imagem': s});
-      }
-    }
-
-    return {
-      ...m,
-      'titulo': titulo,
-      'preco': preco,
-      'fotos': fotos, // grade de sugestões usa m['fotos'][0]['imagem']
-    };
-  }
+  // property normalization now handled by core/utils/property_utils.normalizeProperty
 
   bool _isMine(Map m) {
     // Tenta detectar dono do imóvel
@@ -374,8 +342,13 @@ class _InicialPageState extends State<InicialPage> {
       // Endpoint geral de propriedades (ajuste se o seu for outro)
       final uri = Uri.parse('$backendHost/propriedades/propriedades/').replace(
         queryParameters: {
+          // aplicar categoria quando não for "Tudo"
           if (_selectedCategory != 0)
             'tipo': _categories[_selectedCategory].toLowerCase(), // casa|apartamento|kitnet
+          // garantir ordenação por mais recentes
+          'ordering': '-data_criacao',
+          // limitar para pelo menos 10 itens
+          'page_size': '10',
         },
       );
 
@@ -388,19 +361,25 @@ class _InicialPageState extends State<InicialPage> {
       );
 
       if (resp.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(resp.body) as List<dynamic>;
+        final decoded = jsonDecode(resp.body);
+        // Resposta pode ser paginada (objeto com 'results') ou lista simples
+        final List<dynamic> data = decoded is List<dynamic>
+            ? decoded
+            : (decoded is Map<String, dynamic> && decoded['results'] is List<dynamic>
+                ? List<dynamic>.from(decoded['results'] as List)
+                : <dynamic>[]);
 
         // IDs dos meus anúncios para evitar duplicatas
         final myIds = _meusAnuncios.map((e) => e['id']).toSet();
 
         final outros = <Map<String, dynamic>>[];
         for (final raw in data) {
-          final m = Map<String, dynamic>.from(raw as Map);
+          final norm = normalizeProperty(raw);
           // pula itens que são meus
-          if (_isMine(m)) continue;
+          if (_isMine(norm)) continue;
           // pula se já está na seção "meus anúncios"
-          if (myIds.contains(m['id'])) continue;
-          outros.add(_normalizeSugestao(m));
+          if (myIds.contains(norm['id'])) continue;
+          outros.add(norm);
         }
 
         if (mounted) {
@@ -424,6 +403,28 @@ class _InicialPageState extends State<InicialPage> {
     }
   }
 
+  Future<void> _loadNotificationCount() async {
+    final token = await AuthService.getSavedToken();
+    if (token == null) return; // Se não tem token, não faz nada
+
+    final count = await NotificationService.getUnreadCount(token: token);
+    
+    if (mounted) {
+      setState(() {
+        _notificationCount = count;
+      });
+    }
+  }
+  
+  //quando abre a tela atualiza a contagem de notificação
+  Future<void> _abrirNotificacoes() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const NotificacoesMensagensPage()),
+    );
+    _loadNotificationCount();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -441,11 +442,16 @@ class _InicialPageState extends State<InicialPage> {
                   name: _firstName,
                   avatarBytes: widget.avatarBytes,
                   avatarUrl: _avatarUrl,
-                  onAdd: _abrirCriarImovel,
+                  // Disponibiliza o botão de adicionar imóvel apenas para quem é "roommate" (locador)
+                  onAdd: _userPreference == 'roommate' ? _abrirCriarImovel : null,
+                  notificationCount: _notificationCount,
+                  onNotificationIconPressed: _abrirNotificacoes,
                 ),
                 const SizedBox(height: 16),
-                _LocationAndProfile(city: widget.city),
-                const SizedBox(height: 20),
+                if (_showLocationAndSearch) ...[
+                  _LocationAndProfile(city: widget.city),
+                  const SizedBox(height: 20),
+                ],
 
                 if (_meusAnuncios.isNotEmpty) ...[
                   const _SectionHeader(title: 'Meus anúncios'),
@@ -458,9 +464,10 @@ class _InicialPageState extends State<InicialPage> {
                   const SizedBox(height: 24),
                 ],
 
-                // Busca (mantida porque ajuda o usuário)
-                const _SearchBar(),
-                const SizedBox(height: 16),
+                if (_showLocationAndSearch) ...[
+                  const _SearchBar(),
+                  const SizedBox(height: 16),
+                ],
 
                 // Filtro de categoria (aplica nas sugestões)
                 _CategoryChips(
@@ -505,7 +512,9 @@ class _InicialPageState extends State<InicialPage> {
               Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginHomePage()));
               return;
             }
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()));
+            await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()));
+            // Ao retornar do Perfil, recarrega o usuário para atualizar preferência sem relogar
+            await _loadMe();
             return;
           }
           // Aba Buscar: abrir tela de resultados
@@ -516,6 +525,16 @@ class _InicialPageState extends State<InicialPage> {
               return;
             }
             Navigator.push(context, MaterialPageRoute(builder: (_) => SearchResultsPage(token: token)));
+            return;
+          }
+          // Aba Favoritos: abrir lista de favoritos
+          if (i == 2) {
+            final token = await AuthService.getSavedToken();
+            if (token == null) {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginHomePage()));
+              return;
+            }
+            Navigator.push(context, MaterialPageRoute(builder: (_) => FavoritesPage(token: token)));
             return;
           }
           setState(() => _navIndex = i);
@@ -541,8 +560,10 @@ class _Header extends StatelessWidget {
   final Uint8List? avatarBytes; // bytes do avatar (opcional)
   final String? avatarUrl; // optional remote avatar url
   final VoidCallback? onAdd;
+  final int notificationCount;
+  final VoidCallback onNotificationIconPressed; 
 
-  const _Header({required this.name, this.avatarBytes, this.avatarUrl, this.onAdd});
+  const _Header({required this.name, this.avatarBytes, this.avatarUrl, this.onAdd, required this.notificationCount, required this.onNotificationIconPressed});
 
   String _initials(String n) {
     final parts = n.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
@@ -593,7 +614,16 @@ class _Header extends StatelessWidget {
                     tooltip: 'Adicionar imóvel',
                   ),
                 const SizedBox(width: 6),
-                const Icon(Icons.notifications_none_rounded),
+
+                Badge(
+                  label: Text(notificationCount.toString()),
+                  isLabelVisible: notificationCount > 0,
+                  child: IconButton(
+                    icon: const Icon(Icons.notifications_none_rounded),
+                    onPressed: onNotificationIconPressed, 
+                  ),
+                ),
+                               
                 const SizedBox(width: 10),
                 PopupMenuButton<String>(
                   onSelected: (v) async {
@@ -608,6 +638,22 @@ class _Header extends StatelessWidget {
                       try {
                         Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfilePage()));
                       } catch (_) {}
+                    } else if (v == 'settings') {
+                      final token = await AuthService.getSavedToken();
+                      if (token == null) {
+                        try {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginHomePage()));
+                        } catch (_) {}
+                        return;
+                      }
+                      try {
+                        await Navigator.push(context, MaterialPageRoute(builder: (_) => const PreferenceSwitchPage()));
+                      } catch (_) {}
+                    } else if (v == 'contratos') {
+                      // abrir página de contratos (placeholder)
+                      try {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const ContratosPage()));
+                      } catch (_) {}
                     } else if (v == 'logout') {
                       await AuthService.logout();
                       try {
@@ -621,6 +667,8 @@ class _Header extends StatelessWidget {
                   },
                   itemBuilder: (_) => const [
                     PopupMenuItem(value: 'perfil', child: Text('Perfil')),
+                    PopupMenuItem(value: 'settings', child: Text('Configurações')),
+                    PopupMenuItem(value: 'contratos', child: Text('Contratos')),
                     PopupMenuItem(value: 'logout', child: Text('Sair')),
                   ],
                   child: CircleAvatar(
@@ -872,6 +920,35 @@ class _MeuAnuncioCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: FutureBuilder<String?>(
+                        future: AuthService.getSavedToken(),
+                        builder: (ctx, snap) {
+                          final token = snap.data;
+                          return IconButton(
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: token == null
+                                ? null
+                                : () async {
+                                    final id = dados['id'];
+                                    if (id == null) return;
+                                    final res = await FavoritesService.toggleFavorite(id as int, token: token);
+                                    if (res != null) {
+                                      dados['favorito'] = res;
+                                      (ctx as Element).markNeedsBuild();
+                                    }
+                                  },
+                            icon: Icon(
+                              dados['favorito'] == true ? Icons.favorite : Icons.favorite_border,
+                              color: dados['favorito'] == true ? Colors.redAccent : Colors.white,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -929,6 +1006,54 @@ class _MeuAnuncioCard extends StatelessWidget {
                   height: 1.25,
                 ),
               ),
+            ),
+
+            const SizedBox(height: 8),
+            // linha de características (quando disponíveis)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Builder(builder: (ctx) {
+                int? beds;
+                int? baths;
+                bool wifi = false;
+                try {
+                  final q = dados['quartos'] ?? dados['dormitorios'] ?? dados['quarto'] ?? dados['rooms'];
+                  if (q != null) beds = q is int ? q : int.tryParse(q.toString());
+                } catch (_) {}
+                try {
+                  final b = dados['banheiros'] ?? dados['banheiro'] ?? dados['bathrooms'];
+                  if (b != null) baths = b is int ? b : int.tryParse(b.toString());
+                } catch (_) {}
+                try {
+                  final w = dados['wifi'] ?? dados['has_wifi'] ?? dados['tem_wifi'];
+                  if (w != null) {
+                    if (w is bool) wifi = w;
+                    else if (w is String) wifi = w.toLowerCase() == 'true';
+                  }
+                } catch (_) {}
+
+                return Row(
+                  children: [
+                    if (beds != null) ...[
+                      const Icon(Icons.bed_outlined, size: 16),
+                      const SizedBox(width: 6),
+                      Text('${beds}', style: GoogleFonts.poppins(fontSize: 12)),
+                      const SizedBox(width: 12),
+                    ],
+                    if (baths != null) ...[
+                      const Icon(Icons.bathtub_outlined, size: 16),
+                      const SizedBox(width: 6),
+                      Text('${baths}', style: GoogleFonts.poppins(fontSize: 12)),
+                      const SizedBox(width: 12),
+                    ],
+                    if (wifi) ...[
+                      const Icon(Icons.wifi, size: 16),
+                      const SizedBox(width: 6),
+                      Text('Wi‑Fi', style: GoogleFonts.poppins(fontSize: 12)),
+                    ],
+                  ],
+                );
+              }),
             ),
 
             const SizedBox(height: 12),
@@ -1122,24 +1247,68 @@ class _SugestoesGrid extends StatelessWidget {
           final title = m['titulo']?.toString() ?? '';
           final preco = m['preco']?.toString() ?? m['preco_total']?.toString() ?? '';
 
-          return GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ImovelDetalhePage(imovel: m),
+                  return StatefulBuilder(
+            builder: (ctx, setSt) {
+              bool fav = m['favorito'] == true;
+
+              // tenta extrair características comuns quando presentes
+              int? beds;
+              int? baths;
+              bool wifi = false;
+              try {
+                final q = m['quartos'] ?? m['dormitorios'] ?? m['quarto'] ?? m['rooms'];
+                if (q != null) beds = q is int ? q : int.tryParse(q.toString());
+              } catch (_) {}
+              try {
+                final b = m['banheiros'] ?? m['banheiro'] ?? m['bathrooms'];
+                if (b != null) baths = b is int ? b : int.tryParse(b.toString());
+              } catch (_) {}
+              try {
+                final w = m['wifi'] ?? m['has_wifi'] ?? m['tem_wifi'];
+                if (w != null) {
+                  if (w is bool) wifi = w;
+                  else if (w is String) wifi = w.toLowerCase() == 'true';
+                }
+              } catch (_) {}
+
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ImovelDetalhePage(imovel: m),
+                    ),
+                  );
+                },
+                child: _PropertyCard(
+                  item: _Property(
+                    title: title,
+                    image: foto,
+                    price: preco.isEmpty ? '-' : 'R\$ $preco',
+                    rating: (m['rating'] is num) ? (m['rating'] as num).toDouble() : double.tryParse((m['rating'] ?? '').toString()) ?? 0.0,
+                    distance: '-',
+                    beds: beds,
+                    baths: baths,
+                    hasWifi: wifi,
+                  ),
+                  favorito: fav,
+                  onToggleFavorite: () async {
+                    final token = await AuthService.getSavedToken();
+                    if (token == null) return;
+                    final id = m['id'];
+                    if (id == null) return;
+                    final int pid = id is int ? id : int.tryParse(id.toString()) ?? -1;
+                    if (pid < 0) return;
+                    final res = await FavoritesService.toggleFavorite(pid, token: token);
+                    if (res != null) {
+                      setSt(() {
+                        m['favorito'] = res;
+                      });
+                    }
+                  },
                 ),
               );
             },
-            child: _PropertyCard(
-              item: _Property(
-                title: title,
-                image: foto,
-                price: preco.isEmpty ? '-' : 'R\$ $preco',
-                rating: 4.8,
-                distance: '—',
-              ),
-            ),
           );
         },
       ),
@@ -1154,6 +1323,9 @@ class _Property {
   final double rating;
   final String distance;
   final String? tag;
+  final int? beds;
+  final int? baths;
+  final bool hasWifi;
 
   const _Property({
     required this.title,
@@ -1162,107 +1334,166 @@ class _Property {
     required this.rating,
     required this.distance,
     this.tag,
+    this.beds,
+    this.baths,
+    this.hasWifi = false,
   });
 }
 
 class _PropertyCard extends StatelessWidget {
-  const _PropertyCard({required this.item});
+  const _PropertyCard({required this.item, this.favorito = false, this.onToggleFavorite});
   final _Property item;
+  final bool favorito;
+  final VoidCallback? onToggleFavorite;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF000000).withValues(alpha: .05),
-            blurRadius: 10,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: .06),
+            blurRadius: 12,
+            offset: const Offset(0, 8),
           )
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(22),
-                  topRight: Radius.circular(22),
+          // imagem com badges (nota e preço)
+          ClipRRect(
+            borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+            child: Stack(
+              children: [
+                SizedBox(
+                  height: 140,
+                  width: double.infinity,
+                  child: item.image.isEmpty
+                      ? _placeholderBox(height: 140)
+                      : Image.network(
+                          item.image,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _placeholderBox(height: 140),
+                        ),
                 ),
-                child: item.image.isEmpty
-                    ? _placeholderBox(height: 130)
-                    : Image.network(
-                        item.image,
-                        height: 130,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _placeholderBox(height: 130),
-                      ),
-              ),
-              Positioned(
-                left: 10,
-                bottom: 10,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFF8A34),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    item.price,
-                    style: GoogleFonts.poppins(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                // rating badge (top-right)
+                Positioned(
+                  right: 10,
+                  top: 10,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.95),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withValues(alpha: .04), blurRadius: 6, offset: const Offset(0, 3)),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.star, size: 14, color: Color(0xFFFFC107)),
+                        const SizedBox(width: 6),
+                        Text(item.rating.toStringAsFixed(1), style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700)),
+                      ],
                     ),
                   ),
                 ),
-              ),
-              Positioned(
-                right: 10,
-                top: 10,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
+                // price badge (bottom-left)
+                Positioned(
+                  left: 10,
+                  bottom: 10,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF8A34),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      item.price,
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
-                  child: const Icon(Icons.favorite_border, size: 18),
                 ),
-              ),
-            ],
+                // favorite
+                Positioned(
+                  right: 10,
+                  bottom: 10,
+                  child: InkWell(
+                    onTap: onToggleFavorite,
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        favorito ? Icons.favorite : Icons.favorite_border,
+                        size: 18,
+                        color: favorito ? Colors.redAccent : Colors.black,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
+
+          // conteúdo textual
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
             child: Text(
               item.title,
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
               ),
             ),
           ),
-          const SizedBox(height: 6),
+
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              item.distance,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[700], fontWeight: FontWeight.w500),
+            ),
+          ),
+
+          const SizedBox(height: 8),
+          // linha de características (quartos / banheiros / wifi)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: Row(
               children: [
-                const Icon(Icons.star, size: 16, color: Color(0xFFFFC107)),
-                const SizedBox(width: 4),
-                Text(
-                  item.rating.toStringAsFixed(1),
-                  style: GoogleFonts.poppins(fontSize: 12),
-                ),
-                const SizedBox(width: 10),
-                const Icon(Icons.location_on_outlined, size: 16),
-                const SizedBox(width: 2),
-                Text(item.distance, style: GoogleFonts.poppins(fontSize: 12)),
+                if (item.beds != null) ...[
+                  const Icon(Icons.bed_outlined, size: 16),
+                  const SizedBox(width: 6),
+                  Text('${item.beds}', style: GoogleFonts.poppins(fontSize: 12)),
+                  const SizedBox(width: 12),
+                ],
+                if (item.baths != null) ...[
+                  const Icon(Icons.bathtub_outlined, size: 16),
+                  const SizedBox(width: 6),
+                  Text('${item.baths}', style: GoogleFonts.poppins(fontSize: 12)),
+                  const SizedBox(width: 12),
+                ],
+                if (item.hasWifi) ...[
+                  const Icon(Icons.wifi, size: 16),
+                  const SizedBox(width: 6),
+                  Text('Wi‑Fi', style: GoogleFonts.poppins(fontSize: 12)),
+                ],
+                const Spacer(),
               ],
             ),
           ),
